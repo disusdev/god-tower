@@ -1,0 +1,20 @@
+.{
+    .name = "stuck2deep",
+    .version = "0.0.0",
+    .minimum_zig_version = "0.13.0",
+
+    .dependencies = .{
+        .raylib = .{
+            .path = "external/raylib"
+        },
+        .tracy = .{
+            .path = "external/zig-tracy"
+        },
+    },
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
