@@ -38,6 +38,13 @@ pub fn main() !void {
     hero = Character.hero();
     hero.position.x = 3 * 16 + 10;
     hero.position.y = 2 * 16 + 8;
+    
+    var enemies = std.ArrayList(Character).init(allocator);
+    defer enemies.deinit();
+    
+    try enemies.append(Character.slime(3 * 16 + 10, 10 * 16 + 8));
+    try enemies.append(Character.slime(4 * 16 + 10 - 4, 11 * 16 + 8 - 4));
+    try enemies.append(Character.slime(2 * 16 + 10 + 4, 11 * 16 + 8 - 4));
 
     map = Map.room_1();
     const coll_rects = try Map.get_collision_rects(allocator);
@@ -80,7 +87,7 @@ pub fn main() !void {
             camera.zoom += wheel_move;
         }
 
-        hero.update();
+        hero.update(dt, enemies.items);
 
         if (world.bodies.getPtr(hero_body)) |body| {
             body.velocity.x += hero.velocity.x * dt;
@@ -90,11 +97,7 @@ pub fn main() !void {
             body.velocity.y += body.velocity.y * -0.2;
         }
 
-        {
-            const zone = tracy.initZone(@src(), .{ .name = "Important work" });
-            defer zone.deinit();
-
-            
+        {   
             var obj_iterator = objects.valueIterator();
             while(obj_iterator.next()) |obj| {
                 if (!obj.empty) {
@@ -145,6 +148,11 @@ pub fn main() !void {
 
         rl.BeginDrawing();
         rl.ClearBackground(rl.GetColor(0x140b28ff));
+        
+        //const texts = std.fmt.allocPrint(allocator, "src: {f}", .{hero.attack_src_angle});
+        //rl.DrawText("", 20, 20, , 24, rl.BLACK);
+        //const textd = std.fmt.allocPrint(allocator, "dst: {f}", .{hero.attack_dst_angle});
+        //rl.DrawText("", 20, 40, , 24, rl.BLACK);
 
         rl.BeginMode2D(camera);
 
@@ -158,10 +166,13 @@ pub fn main() !void {
             }
             obj.draw(map.texture, position);
         }
+        
+        for (enemies.items) |*enemy| {
+            enemy.draw();
+        }
+        
         hero.draw();
-
-        //rl.DrawLineV(hero.position, rl.Vector2Add(hero.position, hero.velocity), rl.GREEN);
-
+        
 
         if (rl.IsKeyDown(rl.KEY_C)) {
             var body_iterator = world.bodies.iterator();
