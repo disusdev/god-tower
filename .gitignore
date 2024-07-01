@@ -1,4 +1,2 @@
 .zig-cache/
-data/
 zig-out/
-zig-cache
