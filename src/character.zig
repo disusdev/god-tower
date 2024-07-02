@@ -4,6 +4,7 @@ const Frame = @import("frame.zig");
 const Box = @import("box2d.zig");
 const physics = @import("physics.zig");
 const T = @This();
+const AbilitySystem = @import("ability_system.zig");
 
 const Direction = enum(u8) {
     Up = 0,
@@ -36,7 +37,49 @@ const Animation = struct {
     flip: bool = false,
 };
 
+const Renderer = struct {
+    texture: rl.Texture2D = undefined,
+    rect: rl.Rectangle = undefined,
+    visible: bool = true,
+};
+
+pub const Weapon = struct {
+    pos: rl.Vector2,
+    target: *T,
+    rot: f32,
+    pivot: rl.Vector2,
+    renderer: Renderer,
+    
+    pub fn init(pos: rl.Vector2, target: *T, tex: rl.Texture2D, rect: rl.Rectangle, pivot: rl.Vector2) Weapon {
+        return Weapon {
+            .pos = pos,
+            .target = target,
+            .rot = 0,
+            .renderer = .{ .texture = tex, .rect = rect, .visible = false },
+            .pivot = pivot,
+        };
+    }
+    
+    pub fn draw(self: Weapon) void {
+        if (!self.renderer.visible) return;
+        const target_pos = physics.get_pos(self.target.body);
+        // rl.DrawTextureRec(self.renderer.texture, self.renderer.rect, rl.Vector2Add(target_pos, self.pos), rl.WHITE);
+        const dst_rect = .{
+            .x = target_pos.x+self.pos.y,
+            .y = target_pos.y+self.pos.y,
+            .width = self.renderer.rect.width,
+            .height = self.renderer.rect.height
+        };
+        rl.DrawTexturePro(self.renderer.texture, self.renderer.rect, dst_rect, self.pivot, self.rot, rl.WHITE);
+    }
+};
+
+weapon: ?Weapon = null,
+
 body: Box.BodyHandle = undefined,
+
+move: AbilitySystem.MoveAbility = .{},
+attack: AbilitySystem.AttackAbility = .{},
 
 stat_points: u32 = 0,
 stats: Attributes = undefined,
@@ -45,102 +88,17 @@ level: u32 = 0,
 
 hp: i32 = 10,
 
-attack_damage: u32 = 1,
 
 animations: []const []const Frame = undefined,
-texture: rl.Texture2D = undefined,
+renderer: Renderer = undefined,
 
 dir: Direction = .Down,
-
-velocity: rl.Vector2 = rl.Vector2Zero(),
-speed: f32 = 512.0,
 
 animator: Animation = Animation {},
 
 dmg_seed: i8 = -1,
 
-attack_line: [2] rl.Vector2 = undefined,
-attack_progress: f32 = 0.0,
-attack_seed: i8 = 0,
-attack_length: f32 = 16.0,
-attack_speed: f32 = 3.5,
-attack_angle: f32 = 0.0,
-attack_src_angle: f32 = 0.0,
-attack_dst_angle: f32 = 0.0,
-
 dead: bool = false,
-
-pub fn CheckCollisionLineCircle(start: rl.Vector2, end: rl.Vector2, center: rl.Vector2, radius: f32) bool {
-    const startToEnd = rl.Vector2Subtract(end, start);
-    const startToCenter = rl.Vector2Subtract(center, start);
-
-    const startToEndLengthSquared = rl.Vector2LengthSqr(startToEnd);
-
-    var t = rl.Vector2DotProduct(startToCenter, startToEnd) / startToEndLengthSquared;
-    t = @max(0, @min(1, t));
-
-    const projection = rl.Vector2Add(start, rl.Vector2Scale(startToEnd, t));
-    const centerToProjection = rl.Vector2Subtract(center, projection);
-
-    const distanceSquared = rl.Vector2LengthSqr(centerToProjection);
-
-    return distanceSquared <= (radius * radius);
-}
-
-pub fn attack(self: *T, pos: rl.Vector2) void {
-    self.attack_progress = 0.0;
-    self.attack_src_angle = 45 + 180 + (90 * @as(f32, @floatFromInt(@intFromEnum(self.dir))));
-    self.attack_dst_angle = self.attack_src_angle + 90;
-    if (self.dir == .SideLeft or
-        (self.animator.flip and (self.dir == .Up or
-        self.dir == .Down))) {
-        const src = self.attack_src_angle;
-        self.attack_src_angle = self.attack_dst_angle;
-        self.attack_dst_angle = src;
-    }
-    self.attack_angle = self.attack_dst_angle;
-    const attack_radians = std.math.degreesToRadians(self.attack_angle);
-    self.attack_line[0] = .{
-        .x = pos.x,
-        .y = pos.y
-    };// self.position;
-    self.attack_line[1] = .{
-        .x = @cos(attack_radians),
-        .y = @sin(attack_radians)
-    };
-    self.attack_line[1] = rl.Vector2Scale(self.attack_line[1], self.attack_length);
-    self.attack_line[1].x += self.attack_line[0].x;
-    self.attack_line[1].y += self.attack_line[0].y;
-    self.attack_seed = self.attack_seed + 1;
-}
-
-pub fn attack_step(self: *T, progress: f32, characters: [] T, pos: rl.Vector2) void {
-    self.attack_angle = rl.Lerp(self.attack_dst_angle, self.attack_src_angle, progress);// dt * self.attack_speed;
-    const attack_radians = std.math.degreesToRadians(self.attack_angle);
-    self.attack_line[0] = .{
-        .x = pos.x,
-        .y = pos.y
-    };
-    self.attack_line[1] = .{ .x = @cos(attack_radians), .y = @sin(attack_radians) };
-    self.attack_line[1] = rl.Vector2Scale(self.attack_line[1], self.attack_length);
-    self.attack_line[1].x += self.attack_line[0].x;
-    self.attack_line[1].y += self.attack_line[0].y;
-    
-    for (characters) |*character| {
-        self.attack_solve(character);
-    }
-}
-
-pub fn attack_solve(self: *T, other: *T) void {
-    const other_body_pos = physics.world.bodies.get(other.body).?.position;
-    const other_pos = .{
-        .x = other_body_pos.x,
-        .y = other_body_pos.y
-    };
-    if (CheckCollisionLineCircle(self.attack_line[0], self.attack_line[1], other_pos, 8.0)) {
-        self.exp += other.damage(self.attack_damage, self.attack_seed);
-    }
-}
 
 pub fn damage(self: *T, dmg: u32, seed: i8) u32 {
     if (seed == self.dmg_seed) return 0;
@@ -212,30 +170,9 @@ pub fn set_animation(self: *T, state: AnimationState, dir: Direction) void {
     }
 }
 
-pub fn solve_collision(self: *T, rect: rl.Rectangle) void {
-    var closest_point: rl.Vector2 = undefined;
-    closest_point.x = @max(rect.x, @min(self.body.position.x, rect.x + rect.width));
-    closest_point.y = @max(rect.y, @min(self.body.position.y, rect.y + rect.height));
-
-    const distance_vector = rl.Vector2 { .x = closest_point.x - self.body.position.x, .y = closest_point.y - self.body.position.y };
-    const distance: f32 = rl.Vector2Length(distance_vector);
-
-    if (distance < 1.0) {
-        const penetration_depth = 0.5 - distance;
-        const collision_normal = rl.Vector2Normalize(distance_vector);
-
-        self.body.position.x -= collision_normal.x * penetration_depth;
-        self.body.position.y -= collision_normal.y * penetration_depth;
-
-        const velocity_dot_normal: f32 = self.velocity.x * collision_normal.x + self.velocity.y * collision_normal.y;
-        self.velocity.x -= velocity_dot_normal * collision_normal.x;
-        self.velocity.y -= velocity_dot_normal * collision_normal.y;
-    }
-}
-
 pub fn draw(self: *T) void {
     if (self.dead) return;
-
+    if (!self.renderer.visible) return;
 
     var pos = rl.Vector2Zero();
     if (physics.world.bodies.getPtr(self.body)) |body| {
@@ -248,7 +185,10 @@ pub fn draw(self: *T) void {
     var rect = self.animator.current_anim[self.animator.frame_idx].rect;
     rect.width = if (self.animator.flip) -@abs(rect.width) else @abs(rect.width);
 
-    rl.DrawTextureRec(self.texture, rect, .{ .x=pos.x-@abs(self.animator.current_anim[self.animator.frame_idx].rect.width)/2, .y=pos.y-6-@abs(self.animator.current_anim[self.animator.frame_idx].rect.height)/2 }, rl.WHITE);
+    rl.DrawTextureRec(self.renderer.texture, rect, .{ .x=pos.x-@abs(self.animator.current_anim[self.animator.frame_idx].rect.width)/2, .y=pos.y-6-@abs(self.animator.current_anim[self.animator.frame_idx].rect.height)/2 }, rl.WHITE);
+    if (self.weapon) |w| {
+        w.draw();
+    }
 
     self.animator.frame_time += rl.GetFrameTime();
     if (self.animator.frame_time >= (@as(f32, @floatFromInt(self.animator.current_anim[self.animator.frame_idx].duration)) * 0.001)) {
@@ -263,14 +203,15 @@ pub fn draw(self: *T) void {
         self.animator.frame_time = 0.0;
     }
     
-    rl.DrawLineV(self.attack_line[0], self.attack_line[1], rl.GREEN);
+    if (self.weapon) |*w| {
+        w.rot = self.attack.attack_angle + 90;
+    }
+    rl.DrawLineV(self.attack.attack_line[0], self.attack.attack_line[1], rl.GREEN);
 }
 
 pub fn update(self: *T, dt: f32, characters: [] T) void {
-    const pos = physics.world.bodies.get(self.body).?.position;
     if (self.animator.state == .Attack) {
-        self.attack_progress = @min(1, self.attack_progress + dt * self.attack_speed);
-        self.attack_step(self.attack_progress, characters, .{.x=pos.x, .y=pos.y});
+        self.attack.step(self, characters, dt);
         return;
     }
     
@@ -326,29 +267,18 @@ pub fn update(self: *T, dt: f32, characters: [] T) void {
         self.dir = .Down;
     }
 
-    self.velocity.x = x_axis;
-    self.velocity.y = y_axis;
-    self.velocity = rl.Vector2Scale(rl.Vector2Normalize(self.velocity), self.speed);
-
+    self.move.exec(self.*, .{.x=x_axis, .y=y_axis}, dt);
+    
     if (rl.IsKeyPressed(rl.KEY_RIGHT_CONTROL) or
         rl.IsKeyPressed(rl.KEY_LEFT_CONTROL) or
         rl.IsGamepadButtonPressed(0, rl.GAMEPAD_BUTTON_RIGHT_FACE_LEFT)) {
-        self.velocity = rl.Vector2Zero();
         self.animator.state = .Attack;
-        self.attack(.{.x=pos.x, .y=pos.y});
-    } else if (rl.Vector2Length(self.velocity) > 0.1) {
+        self.attack.exec(self);
+        physics.set_vel(self.body, rl.Vector2Zero());
+    } else if (rl.Vector2Length(physics.get_vel(self.body)) > 0.1) {
         self.animator.state = .Move;
     } else {
         self.animator.state = .Idle;
-    }
-
-    // @todo call to the physics manager
-    //       Physics.add_velocity(self.body, velocity);
-    if (physics.world.bodies.getPtr(self.body)) |body| {
-        body.velocity.x += self.velocity.x * dt;
-        body.velocity.y += self.velocity.y * dt;
-        body.velocity.x += body.velocity.x * -0.2;
-        body.velocity.y += body.velocity.y * -0.2;
     }
 }
 
@@ -358,7 +288,7 @@ pub fn update(self: *T, dt: f32, characters: [] T) void {
 pub fn hero(x:f32, y:f32) T {
     return T {
         .body = physics.world.addBody(Box.Body.init(.{ .x = x, .y = y }, .{ .x = 8.0, .y = 6.0 }, 2.0, 0.2)),
-        .texture = rl.LoadTexture("data/sprites/hero.png"),
+        .renderer = .{ .texture = rl.LoadTexture("data/sprites/hero.png") },
         .animations = &.{
             &.{// idle
                 .{.rect = .{.x = 0 * 48, .y = 0, .width = 48, .height = 48}, .duration = 640},
@@ -434,7 +364,7 @@ pub fn slime(x:f32, y:f32) T {
     return T {
         .hp = 2,
         .body = physics.world.addBody(Box.Body.init(.{ .x = x, .y = y }, .{ .x = 8.0, .y = 6.0 }, 2.0, 0.2)),
-        .texture = rl.LoadTexture("data/sprites/slime.png"),
+        .renderer = .{ .texture = rl.LoadTexture("data/sprites/slime.png") },
         .animations = &.{
             &.{// idle
                 .{.rect = .{.x = 0 * 48, .y = 0, .width = 48, .height = 48}, .duration = 640},
