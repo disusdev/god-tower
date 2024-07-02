@@ -28,7 +28,12 @@ pub fn main() !void {
 
     var camera = rl.Camera2D {.offset = .{.x = SCREEN_WIDTH/2-16,.y = SCREEN_HEIGHT/2-16}, .rotation = 0, .target = .{.x = 0,.y = 0}, .zoom = 2.0 };
 
+    const weapons_tex = rl.LoadTexture("data/sprites/weapons.png");
+    defer rl.UnloadTexture(weapons_tex);
+
     hero = Character.hero(3 * 16 + 10, 2 * 16 + 8);
+    
+    hero.weapon = Character.Weapon.init(.{.x=0,.y=2}, &hero, weapons_tex, rl.Rectangle{.x=6,.y=9,.width=7,.height=16}, .{.x=3, .y=12});
     
     var enemies = std.ArrayList(Character).init(allocator);
     defer enemies.deinit();
@@ -39,7 +44,7 @@ pub fn main() !void {
 
     map = Map.room_1();
     const coll_rects = try Map.get_collision_rects(allocator);
-    var objects= try Map.get_objects(allocator);
+    var objects = try Map.get_objects(allocator);
 
     var rect: rl.Rectangle = undefined;
     for (map.layers) |layer| {
@@ -63,10 +68,8 @@ pub fn main() !void {
             }
         }
     }
-
-    if (physics.world.bodies.get(hero.body)) |body| {
-        camera.target = .{ .x = body.position.x, .y = body.position.y };
-    }
+    
+    camera.target = physics.get_pos(hero.body);
 
     while (!rl.WindowShouldClose()) {
         tracy.frameMark();
@@ -79,62 +82,10 @@ pub fn main() !void {
         }
 
         hero.update(dt, enemies.items);
+        
+        // hero.weapon.?.rot += 1;
 
-        //if (world.bodies.getPtr(hero.body)) |body| {
-        //    body.velocity.x += hero.velocity.x * dt;
-        //    body.velocity.y += hero.velocity.y * dt;
-        //    body.velocity.x += body.velocity.x * -0.2;
-        //    body.velocity.y += body.velocity.y * -0.2;
-        //}
-
-        {   
-            var obj_iterator = objects.valueIterator();
-            var hero_pos = rl.Vector2Zero();
-            if (physics.world.bodies.get(hero.body)) |body| {
-                hero_pos.x = body.position.x;
-                hero_pos.y = body.position.y;
-            }
-
-            while(obj_iterator.next()) |obj| {
-                if (!obj.empty) {
-                    var position = rl.Vector2Zero();
-                    if (physics.world.bodies.getPtr(obj.body_handle)) |body| {
-                        position.x = body.position.x - obj.src_rect.width / 2;
-                        position.y = body.position.y - obj.src_rect.height / 2;
-                        
-                        if (rl.CheckCollisionPointRec(rl.Vector2Add(hero_pos, rl.Vector2Scale(hero.velocity, 0.3)), .{.x=position.x,.y=position.y,.width=obj.src_rect.width,.height=obj.src_rect.height}) and obj.movable) {
-                            body.velocity.x = hero.velocity.x;
-                            body.velocity.y = hero.velocity.y;
-                        } else {
-                            body.velocity.x = 0;
-                            body.velocity.y = 0;
-                        }
-                    }
-
-                    if (obj.iteractable and (rl.IsKeyPressed(rl.KEY_LEFT_CONTROL) or rl.IsKeyPressed(rl.KEY_RIGHT_CONTROL))) {
-                        if (rl.CheckCollisionCircleRec(rl.Vector2Add(hero_pos, rl.Vector2Scale(hero.velocity, 0.4)), 12, .{.x=position.x,.y=position.y,.width=obj.src_rect.width,.height=obj.src_rect.height})) {
-                            obj.iteract();
-                        }
-                    }
-
-                    if (obj.destroyable and (rl.IsKeyPressed(rl.KEY_LEFT_CONTROL) or rl.IsKeyPressed(rl.KEY_RIGHT_CONTROL))) {
-                        if (rl.CheckCollisionCircleRec(rl.Vector2Add(hero_pos, rl.Vector2Scale(hero.velocity, 0.4)), 12, .{.x=position.x,.y=position.y,.width=obj.src_rect.width,.height=obj.src_rect.height})) {
-                            if (!obj.damage()) {
-                                _ = physics.world.bodies.orderedRemove(obj.body_handle);
-                                _ = objects.remove(obj.id);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        physics.world.step(dt);
-
-        //if (world.bodies.get(hero_body)) |body| {
-        //    hero.position.x = body.position.x;
-        //    hero.position.y = body.position.y - 6;
-        //}
+        physics.step(dt);
 
         camera.target = map.get_center();// rl.Vector2Lerp(camera.target, map.get_center(), dt * 2);
         camera.offset.x = @floatFromInt(@divFloor(rl.GetScreenWidth(),2)-16);
@@ -155,11 +106,9 @@ pub fn main() !void {
         map.draw();
         var obj_iterator = objects.valueIterator();
         while(obj_iterator.next()) |obj| {
-            var position = rl.Vector2Zero();
-            if (physics.world.bodies.get(obj.body_handle)) |body| {
-                position.x = body.position.x - obj.src_rect.width / 2;
-                position.y = body.position.y - obj.src_rect.height / 2;
-            }
+            var position = physics.get_pos(obj.body_handle);
+            position.x = position.x - obj.src_rect.width / 2;
+            position.y = position.y - obj.src_rect.height / 2;
             obj.draw(map.texture, position);
         }
         

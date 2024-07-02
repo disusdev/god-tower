@@ -15,6 +15,7 @@
 // It is provided "as is" without express or implied warranty.
 
 const std = @import("std");
+const rl = @import("rl.zig");
 
 pub const World = struct {
     // options
@@ -731,6 +732,17 @@ pub const Vec2 = struct {
     }
     pub fn abs(a: Vec2) Vec2 {
         return .{ .x = absF32(a.x), .y = absF32(a.y) };
+    }
+    pub fn get(a: Vec2) rl.Vector2 {
+        return rl.Vector2 {
+            .x = a.x,
+            .y = a.y
+        };
+    }
+    
+    pub fn set(a: *Vec2, b: rl.Vector2) void {
+        a.x = b.x;
+        a.y = b.y;
     }
 };
 
