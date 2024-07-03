@@ -2,6 +2,7 @@ const std = @import("std");
 const rl = @import("rl.zig");
 const Frame = @import("frame.zig");
 const Box = @import("box2d.zig");
+const Character = @import("character.zig");
 const T = @This();
 
 texture: rl.Texture2D = undefined,
@@ -67,14 +68,25 @@ const MapObject = struct {
     }
 };
 
-pub fn get_objects(allocator: std.mem.Allocator) !std.AutoHashMap(usize, MapObject) {
-    var map = std.AutoHashMap(usize, MapObject).init(allocator);
+// pub fn get_objects(allocator: std.mem.Allocator) !std.AutoHashMap(usize, MapObject) {
+//     var map = std.AutoHashMap(usize, MapObject).init(allocator);
 
-    try map.put(358, .{});//std.math.inf(f32)
-    try map.put(378, .{.id = 378, .movable = false, .destroyable = true, .empty = false, .mass = std.math.inf(f32), .src_rect = rl.Rectangle { .x = 288, .y = 285, .width = 16, .height = 19 } });
-    try map.put(380, .{.id = 380, .iteractable = true, .empty = false, .mass = std.math.inf(f32), .src_rect = rl.Rectangle { .x = 0, .y = 304, .width = 16, .height = 16 } });
+//     try map.put(358, .{});//std.math.inf(f32)
+//     try map.put(378, .{.id = 378, .movable = false, .destroyable = true, .empty = false, .mass = std.math.inf(f32), .src_rect = rl.Rectangle { .x = 288, .y = 285, .width = 16, .height = 19 } });
+//     try map.put(380, .{.id = 380, .iteractable = true, .empty = false, .mass = std.math.inf(f32), .src_rect = rl.Rectangle { .x = 0, .y = 304, .width = 16, .height = 16 } });
 
-    try map.put(328, .{.id = 328, .empty = false, .mass = std.math.inf(f32), .trigger = true, .src_rect = rl.Rectangle { .x = 128, .y = 256, .width = 16, .height = 16 } });
+//     try map.put(328, .{.id = 328, .empty = false, .mass = std.math.inf(f32), .trigger = true, .src_rect = rl.Rectangle { .x = 128, .y = 256, .width = 16, .height = 16 } });
+
+//     return map;
+// }
+
+pub fn get_objects(allocator: std.mem.Allocator) !std.AutoHashMap(usize, Character) {
+    var map = std.AutoHashMap(usize, Character).init(allocator);
+
+    try map.put(358, Character.box(0, 0));//std.math.inf(f32)
+    try map.put(378, Character.box(0, 0));
+    try map.put(380, Character.box(0, 0));
+    try map.put(328, Character.box(0, 0));
 
     return map;
 }

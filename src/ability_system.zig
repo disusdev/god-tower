@@ -4,12 +4,11 @@ const physics = @import("physics.zig");
 const Character = @import("character.zig");
 
 pub const MoveAbility = struct {
-    speed: f32 = 24.0,
+    speed: f32 = 48.0,
 
-    pub fn exec(self: MoveAbility, character: Character, move: rl.Vector2, dt: f32) void {
-        _ = dt;
+    pub fn exec(self: MoveAbility, character: Character, move: rl.Vector2, speed: f32) void {
         var velocity = move;
-        velocity = rl.Vector2Scale(rl.Vector2Normalize(velocity), self.speed);
+        velocity = rl.Vector2Scale(rl.Vector2Normalize(velocity), self.speed * speed);
         
         const real_velocity = physics.get_vel(character.body);
         velocity.x += real_velocity.x * -0.2;
@@ -23,12 +22,14 @@ pub const AttackAbility = struct {
     attack_damage: u32 = 1,
     attack_line: [2] rl.Vector2 = undefined,
     attack_progress: f32 = 0.0,
-    attack_seed: i8 = 0,
+    seed: i8 = 0,
     attack_length: f32 = 16.0,
     attack_speed: f32 = 3.5,
-    attack_angle: f32 = 0.0,
+    angle: f32 = 0.0,
     attack_src_angle: f32 = 0.0,
     attack_dst_angle: f32 = 0.0,
+    front: bool = true,
+    play: bool = false,
 
     pub fn CheckCollisionLineCircle(start: rl.Vector2, end: rl.Vector2, center: rl.Vector2, radius: f32) bool {
         const startToEnd = rl.Vector2Subtract(end, start);
@@ -49,8 +50,8 @@ pub const AttackAbility = struct {
     
     pub fn step(self: *AttackAbility, character: *Character, characters: [] Character, dt: f32) void {
         self.attack_progress = @min(1, self.attack_progress + dt * self.attack_speed);
-        self.attack_angle = rl.Lerp(self.attack_dst_angle, self.attack_src_angle, self.attack_progress);
-        const attack_radians = std.math.degreesToRadians(self.attack_angle);
+        self.angle = rl.Lerp(self.attack_dst_angle, self.attack_src_angle, self.attack_progress);
+        const attack_radians = std.math.degreesToRadians(self.angle);
         self.attack_line[0] = physics.get_pos(character.body);
         self.attack_line[1] = .{ .x = @cos(attack_radians), .y = @sin(attack_radians) };
         self.attack_line[1] = rl.Vector2Scale(self.attack_line[1], self.attack_length);
@@ -62,31 +63,36 @@ pub const AttackAbility = struct {
         }
         
         if (self.attack_progress == 1) {
-            character.weapon.?.renderer.visible = false;
+            //character.weapon.?.renderer.visible = false;
+            self.play = false;
         }
     }
     
     pub fn attack_solve(self: AttackAbility, other: *Character) u32 {
         const other_pos = physics.get_pos(other.body);
         if (CheckCollisionLineCircle(self.attack_line[0], self.attack_line[1], other_pos, 8.0)) {
-            return other.damage(self.attack_damage, self.attack_seed);
+            return other.damage(self.attack_damage, self.seed);
         }
         return 0;
     }
 
-    pub fn exec(self: *AttackAbility, character: *Character) void {
+    pub fn update(self: *AttackAbility, character: *Character, rot: f32) void {
+        if (self.play) return;
+        
         self.attack_progress = 0.0;
-        self.attack_src_angle = 45 + 180 + (90 * @as(f32, @floatFromInt(@intFromEnum(character.dir))));
-        self.attack_dst_angle = self.attack_src_angle + 90;
-        if (character.dir == .SideLeft or
-            (character.animator.flip and (character.dir == .Up or
-            character.dir == .Down))) {
-            const src = self.attack_src_angle;
-            self.attack_src_angle = self.attack_dst_angle;
-            self.attack_dst_angle = src;
-        }
-        self.attack_angle = self.attack_dst_angle;
-        const attack_radians = std.math.degreesToRadians(self.attack_angle);
+        const dir_angle = if (self.front) rot + 90 else rot - 90;// 90 * @as(f32, @floatFromInt(@intFromEnum(character.dir)))
+        self.attack_src_angle = 180 + dir_angle;
+        self.attack_dst_angle = if (self.front) self.attack_src_angle + 180 else self.attack_src_angle - 180;
+        //if (character.dir == .SideLeft or
+        //    (character.animator.flip and (character.dir == .Up or
+        //    character.dir == .Down))) {
+        //    const src = self.attack_src_angle;
+        //    self.attack_src_angle = self.attack_dst_angle;
+        //    self.attack_dst_angle = src;
+        //}
+
+        self.angle = self.attack_dst_angle;
+        const attack_radians = std.math.degreesToRadians(self.angle);
         self.attack_line[0] = physics.get_pos(character.body);
         self.attack_line[1] = .{
             .x = @cos(attack_radians),
@@ -95,7 +101,26 @@ pub const AttackAbility = struct {
         self.attack_line[1] = rl.Vector2Scale(self.attack_line[1], self.attack_length);
         self.attack_line[1].x += self.attack_line[0].x;
         self.attack_line[1].y += self.attack_line[0].y;
-        self.attack_seed = self.attack_seed + 1;
-        character.weapon.?.renderer.visible = true;
+    }
+
+    pub fn exec(self: *AttackAbility, character: *Character) void {
+        if (self.play) return;
+
+        self.attack_progress = 0.0;
+
+        self.front = !self.front;
+
+        self.angle = self.attack_dst_angle;
+        const attack_radians = std.math.degreesToRadians(self.angle);
+        self.attack_line[0] = physics.get_pos(character.body);
+        self.attack_line[1] = .{
+            .x = @cos(attack_radians),
+            .y = @sin(attack_radians)
+        };
+        self.attack_line[1] = rl.Vector2Scale(self.attack_line[1], self.attack_length);
+        self.attack_line[1].x += self.attack_line[0].x;
+        self.attack_line[1].y += self.attack_line[0].y;
+        self.seed = @addWithOverflow(self.seed, 1)[0];
+        self.play = true;
     }
 };

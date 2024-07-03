@@ -5,6 +5,7 @@ const Map = @import("map.zig");
 const Box = @import("box2d.zig");
 const tracy = @import("tracy");
 const physics = @import("physics.zig");
+const RenderSystem = @import("render_system.zig");
 
 const print = std.debug.print;
 
@@ -25,22 +26,23 @@ pub fn main() !void {
     rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "game");
 
     physics.init(allocator);
+    RenderSystem.init(allocator);
 
     var camera = rl.Camera2D {.offset = .{.x = SCREEN_WIDTH/2-16,.y = SCREEN_HEIGHT/2-16}, .rotation = 0, .target = .{.x = 0,.y = 0}, .zoom = 2.0 };
 
     const weapons_tex = rl.LoadTexture("data/sprites/weapons.png");
     defer rl.UnloadTexture(weapons_tex);
 
-    hero = Character.hero(3 * 16 + 10, 2 * 16 + 8);
+    hero = Character.hero2(3 * 16 + 10, 2 * 16 + 8);
     
-    hero.weapon = Character.Weapon.init(.{.x=0,.y=2}, &hero, weapons_tex, rl.Rectangle{.x=6,.y=9,.width=7,.height=16}, .{.x=3, .y=12});
+    hero.weapon = try Character.Weapon.init(.{.x=0,.y=2}, &hero, weapons_tex, rl.Rectangle{.x=6,.y=9,.width=7,.height=16}, .{.x=3, .y=18});
     
     var enemies = std.ArrayList(Character).init(allocator);
     defer enemies.deinit();
     
-    try enemies.append(Character.slime(3 * 16 + 10, 10 * 16 + 8));
-    try enemies.append(Character.slime(4 * 16 + 10 - 4, 11 * 16 + 8 - 4));
-    try enemies.append(Character.slime(2 * 16 + 10 + 4, 11 * 16 + 8 - 4));
+    try enemies.append(Character.hero2(3 * 16 + 10, 10 * 16 + 8));
+    try enemies.append(Character.hero2(4 * 16 + 10 - 4, 11 * 16 + 8 - 4));
+    try enemies.append(Character.hero2(2 * 16 + 10 + 4, 11 * 16 + 8 - 4));
 
     map = Map.room_1();
     const coll_rects = try Map.get_collision_rects(allocator);
@@ -51,11 +53,7 @@ pub fn main() !void {
         for (layer, 0..) |colls, x| {
             for (colls, 0..) |tile_id, y| {
                 if (objects.getPtr(tile_id)) |obj| {
-                    rect.width = obj.src_rect.width;
-                    rect.height = obj.src_rect.height;
-                    rect.x = @floatFromInt(y * 16);
-                    rect.y = @floatFromInt(x * 16);
-                    obj.body_handle = physics.world.addBody(Box.Body.init(.{ .x = rect.x + rect.width / 2, .y = rect.y + rect.height / 2 - 3 }, .{ .x = rect.width, .y = rect.height }, obj.mass, 0.2));
+                    physics.set_pos(obj.body, .{.x=@as(f32, @floatFromInt(y * 16)) + 8.0, .y=@as(f32, @floatFromInt(x * 16)) + 9.5});
                 } else if (coll_rects.get(tile_id)) |value| {
                     rect.x = @floatFromInt(y * 16);
                     rect.x += value.x;
@@ -81,9 +79,24 @@ pub fn main() !void {
             camera.zoom += wheel_move;
         }
 
+        const mouse_pos = rl.GetMousePosition();
+        const world_pos = rl.GetScreenToWorld2D(mouse_pos, camera);
+        const mouse_dir = rl.Vector2Subtract(world_pos, physics.get_pos(hero.body));
+
         hero.update(dt, enemies.items);
+        hero.attack.update(&hero, @floatCast(rl.atan2(mouse_dir.y, mouse_dir.x) * rl.RAD2DEG));
+        const coef = rl.Vector2DotProduct(.{.x=1,.y=0}, .{.x=@cos(hero.weapon.?.rot * rl.DEG2RAD),.y=@sin(hero.weapon.?.rot * rl.DEG2RAD)});
+        hero.weapon.?.coef = coef;
         
         // hero.weapon.?.rot += 1;
+
+        // self.move.exec(self.*, .{.x=x_axis, .y=y_axis}, if(self.animator.state == .Attack) 0.5 else 1);
+        {
+            var obj_iterator = objects.valueIterator();
+            while(obj_iterator.next()) |obj| {
+                obj.move.exec(obj.*, .{.x=0, .y=0}, 0);
+            }
+        }
 
         physics.step(dt);
 
@@ -106,10 +119,11 @@ pub fn main() !void {
         map.draw();
         var obj_iterator = objects.valueIterator();
         while(obj_iterator.next()) |obj| {
-            var position = physics.get_pos(obj.body_handle);
-            position.x = position.x - obj.src_rect.width / 2;
-            position.y = position.y - obj.src_rect.height / 2;
-            obj.draw(map.texture, position);
+            var position = physics.get_pos(obj.body);
+            const size = physics.get_size(obj.body);
+            position.x = position.x - size.x / 2;
+            position.y = position.y - size.y / 2;
+            obj.draw();
         }
         
         for (enemies.items) |*enemy| {
@@ -117,6 +131,8 @@ pub fn main() !void {
         }
         
         hero.draw();
+
+        RenderSystem.draw();
         
 
         if (rl.IsKeyDown(rl.KEY_C)) {

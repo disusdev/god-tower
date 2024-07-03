@@ -5,6 +5,8 @@ const Box = @import("box2d.zig");
 const physics = @import("physics.zig");
 const T = @This();
 const AbilitySystem = @import("ability_system.zig");
+const RenderSystem = @import("render_system.zig");
+const Renderer = RenderSystem.Renderer;
 
 const Direction = enum(u8) {
     Up = 0,
@@ -37,40 +39,40 @@ const Animation = struct {
     flip: bool = false,
 };
 
-const Renderer = struct {
-    texture: rl.Texture2D = undefined,
-    rect: rl.Rectangle = undefined,
-    visible: bool = true,
-};
-
 pub const Weapon = struct {
     pos: rl.Vector2,
     target: *T,
     rot: f32,
-    pivot: rl.Vector2,
-    renderer: Renderer,
+    add_rot: f32,
+    renderer: RenderSystem.RendererHandle,
+    coef: f32,
     
-    pub fn init(pos: rl.Vector2, target: *T, tex: rl.Texture2D, rect: rl.Rectangle, pivot: rl.Vector2) Weapon {
+    pub fn init(pos: rl.Vector2, target: *T, tex: rl.Texture2D, rect: rl.Rectangle, pivot: rl.Vector2) !Weapon {
         return Weapon {
             .pos = pos,
             .target = target,
             .rot = 0,
-            .renderer = .{ .texture = tex, .rect = rect, .visible = false },
-            .pivot = pivot,
+            .add_rot = 0,
+            .renderer = try RenderSystem.add_renderer(.{ .texture = tex, .rect = rect, .pivot = pivot }),
+            .coef = 0,
         };
     }
     
-    pub fn draw(self: Weapon) void {
-        if (!self.renderer.visible) return;
+    pub fn update(self: *Weapon, progres: f32) void {
+        var renderer = RenderSystem.get_renderer(self.renderer);
+
         const target_pos = physics.get_pos(self.target.body);
-        // rl.DrawTextureRec(self.renderer.texture, self.renderer.rect, rl.Vector2Add(target_pos, self.pos), rl.WHITE);
         const dst_rect = .{
             .x = target_pos.x+self.pos.y,
             .y = target_pos.y+self.pos.y,
-            .width = self.renderer.rect.width,
-            .height = self.renderer.rect.height
+            .width = renderer.rect.width,
+            .height = renderer.rect.height
         };
-        rl.DrawTexturePro(self.renderer.texture, self.renderer.rect, dst_rect, self.pivot, self.rot, rl.WHITE);
+        _ = progres;
+        // self.add_rot = rl.Lerp(0, 45, progres * 0.5);
+        renderer.transform.position = .{.x=dst_rect.x, .y=dst_rect.y};
+        renderer.transform.rotation = self.rot + self.add_rot;
+        // self.renderer.draw();
     }
 };
 
@@ -116,48 +118,24 @@ pub fn damage(self: *T, dmg: u32, seed: i8) u32 {
 
 pub fn set_animation(self: *T, state: AnimationState, dir: Direction) void {
     var id: usize = 0;
+
+    switch (dir) {
+        .SideLeft => {
+            self.animator.flip = true;
+        },
+        .SideRight => {
+            self.animator.flip = false;
+        },
+        else => {},
+    }
+
     if (state == .Move) {
         self.animator.loop = true;
-        switch (dir) {
-            .Down => id = 2,
-            .SideLeft => {
-                id = 3;
-                self.animator.flip = true;
-            },
-            .SideRight => {
-                id = 3;
-                self.animator.flip = false;
-            },
-            .Up => id = 4
-        }
+        id = 1;
     } else if (state == .Attack) {
         self.animator.loop = false;
-        switch (dir) {
-            .Down => id = 5,
-            .SideLeft => {
-                id = 6;
-                self.animator.flip = true;
-            },
-            .SideRight => {
-                id = 6;
-                self.animator.flip = false;
-            },
-            .Up => id = 7
-        }
     } else if (state == .Hit) {
         self.animator.loop = false;
-        switch (dir) {
-            .Down => id = 8,
-            .SideLeft => {
-                id = 9;
-                self.animator.flip = true;
-            },
-            .SideRight => {
-                id = 9;
-                self.animator.flip = false;
-            },
-            .Up => id = 10
-        }
     } else {
         self.animator.loop = true;
     }
@@ -172,7 +150,6 @@ pub fn set_animation(self: *T, state: AnimationState, dir: Direction) void {
 
 pub fn draw(self: *T) void {
     if (self.dead) return;
-    if (!self.renderer.visible) return;
 
     var pos = rl.Vector2Zero();
     if (physics.world.bodies.getPtr(self.body)) |body| {
@@ -186,9 +163,6 @@ pub fn draw(self: *T) void {
     rect.width = if (self.animator.flip) -@abs(rect.width) else @abs(rect.width);
 
     rl.DrawTextureRec(self.renderer.texture, rect, .{ .x=pos.x-@abs(self.animator.current_anim[self.animator.frame_idx].rect.width)/2, .y=pos.y-6-@abs(self.animator.current_anim[self.animator.frame_idx].rect.height)/2 }, rl.WHITE);
-    if (self.weapon) |w| {
-        w.draw();
-    }
 
     self.animator.frame_time += rl.GetFrameTime();
     if (self.animator.frame_time >= (@as(f32, @floatFromInt(self.animator.current_anim[self.animator.frame_idx].duration)) * 0.001)) {
@@ -204,233 +178,94 @@ pub fn draw(self: *T) void {
     }
     
     if (self.weapon) |*w| {
-        w.rot = self.attack.attack_angle + 90;
+        w.rot = self.attack.angle + 90;
     }
-    rl.DrawLineV(self.attack.attack_line[0], self.attack.attack_line[1], rl.GREEN);
+    
+    //rl.DrawLineV(self.attack.attack_line[0], self.attack.attack_line[1], rl.GREEN);
 }
 
 pub fn update(self: *T, dt: f32, characters: [] T) void {
-    if (self.animator.state == .Attack) {
-        self.attack.step(self, characters, dt);
-        return;
-    }
-    
     if (self.animator.state == .Hit) {
         return;
     }
 
-    var x_axis = rl.GetGamepadAxisMovement(0, 0);
-    var y_axis = rl.GetGamepadAxisMovement(0, 1);
-
-    if (x_axis > 0.5) {
-        self.dir = .SideRight;
-    } else if (x_axis < -0.5) {
-        self.dir = .SideLeft;
-    } else if (y_axis < -rl.EPSILON) {
-        self.dir = .Up;
-    } else if (y_axis > rl.EPSILON) {
-        self.dir = .Down;
+    self.attack.step(self, characters, dt);
+    if (self.weapon) |*w| {
+        w.update(self.attack.attack_progress);
     }
+
+    var axis = rl.Vector2 {
+        .x = rl.GetGamepadAxisMovement(0, 0),
+        .y = rl.GetGamepadAxisMovement(0, 1)
+    };
     
     const up = rl.IsKeyDown(rl.KEY_W) or rl.IsKeyDown(rl.KEY_UP);
     const down = rl.IsKeyDown(rl.KEY_S) or rl.IsKeyDown(rl.KEY_DOWN);
     const left = rl.IsKeyDown(rl.KEY_A) or rl.IsKeyDown(rl.KEY_LEFT);
     const right = rl.IsKeyDown(rl.KEY_D) or rl.IsKeyDown(rl.KEY_RIGHT);
 
-    if (left and up) {
-        x_axis = -1.0;
-        y_axis = -1.0;
-        self.dir = .SideLeft;
-    } else if (right and up) {
-        x_axis = 1.0;
-        y_axis = -1.0;
+    axis.x = @floatFromInt(@as(i32, @intFromBool(right)) - @as(i32, @intFromBool(left)));
+    axis.y = @floatFromInt(@as(i32, @intFromBool(down)) - @as(i32,@intFromBool(up)));
+
+    if (axis.x > 0.5) {
         self.dir = .SideRight;
-    } else if (left and down) {
-        x_axis = -1.0;
-        y_axis = 1.0;
+    } else if (axis.x < -0.5) {
         self.dir = .SideLeft;
-    } else if (right and down) {
-        x_axis = 1.0;
-        y_axis = 1.0;
-        self.dir = .SideRight;
-    } else if (left) {
-        x_axis = -1.0;
-        self.dir = .SideLeft;
-    } else if (right) {
-        x_axis = 1.0;
-        self.dir = .SideRight;
-    } else if (up) {
-        y_axis = -1.0;
+    } else if (axis.y < -rl.EPSILON) {
         self.dir = .Up;
-    } else if (down) {
-        y_axis = 1.0;
+    } else if (axis.y > rl.EPSILON) {
         self.dir = .Down;
     }
 
-    self.move.exec(self.*, .{.x=x_axis, .y=y_axis}, dt);
+    self.move.exec(self.*, axis, if(self.animator.state == .Attack) 0.5 else 1);
     
-    if (rl.IsKeyPressed(rl.KEY_RIGHT_CONTROL) or
-        rl.IsKeyPressed(rl.KEY_LEFT_CONTROL) or
-        rl.IsGamepadButtonPressed(0, rl.GAMEPAD_BUTTON_RIGHT_FACE_LEFT)) {
-        self.animator.state = .Attack;
-        self.attack.exec(self);
-        physics.set_vel(self.body, rl.Vector2Zero());
-    } else if (rl.Vector2Length(physics.get_vel(self.body)) > 0.1) {
-        self.animator.state = .Move;
-    } else {
-        self.animator.state = .Idle;
+    if (self.animator.state != .Attack) {
+        if (rl.IsKeyPressed(rl.KEY_RIGHT_CONTROL) or
+            rl.IsKeyPressed(rl.KEY_LEFT_CONTROL) or
+            rl.IsGamepadButtonPressed(0, rl.GAMEPAD_BUTTON_RIGHT_FACE_LEFT) or
+            rl.IsMouseButtonPressed(0)) {
+            self.animator.state = .Attack;
+            self.attack.exec(self);
+            physics.set_vel(self.body, rl.Vector2Zero());
+        } else if (rl.Vector2Length(physics.get_vel(self.body)) > 0.1) {
+            self.animator.state = .Move;
+        } else {
+            self.animator.state = .Idle;
+        }
     }
 }
 
-// @todo make read from file to faster iteration for character animation and map creation!
-//       mb maps could be read from folders with CSVs of layers that called: bg, floor, walls, decor, objects.
-
-pub fn hero(x:f32, y:f32) T {
+pub fn hero2(x:f32, y:f32) T {
     return T {
-        .body = physics.world.addBody(Box.Body.init(.{ .x = x, .y = y }, .{ .x = 8.0, .y = 6.0 }, 2.0, 0.2)),
-        .renderer = .{ .texture = rl.LoadTexture("data/sprites/hero.png") },
+        .body = physics.world.addBody(Box.Body.init(.{ .x = x, .y = y }, .{ .x = 8.0, .y = 12.0 }, 2.0, 0.2)),
+        .renderer = .{ .texture = rl.LoadTexture("data/sprites/base.png"), .pivot = .{.x = 5, .y = 11 } },
         .animations = &.{
             &.{// idle
-                .{.rect = .{.x = 0 * 48, .y = 0, .width = 48, .height = 48}, .duration = 640},
-                .{.rect = .{.x = 1 * 48, .y = 0, .width = 48, .height = 48}, .duration = 80},
-                .{.rect = .{.x = 2 * 48, .y = 0, .width = 48, .height = 48}, .duration = 640},
-                .{.rect = .{.x = 1 * 48, .y = 0, .width = 48, .height = 48}, .duration = 80},
+                .{.rect = .{.x = 2 * 16, .y = 0, .width = 16, .height = 24}, .duration = 100},
+                .{.rect = .{.x = 3 * 16, .y = 0, .width = 16, .height = 24}, .duration = 100},
+                .{.rect = .{.x = 4 * 16, .y = 0, .width = 16, .height = 24}, .duration = 100},
+                .{.rect = .{.x = 5 * 16, .y = 0, .width = 16, .height = 24}, .duration = 100},
+            },
+            &.{// run
+                .{.rect = .{.x = 7 * 16, .y = 0, .width = 16, .height = 24}, .duration = 80},
+                .{.rect = .{.x = 8 * 16, .y = 0, .width = 16, .height = 24}, .duration = 80},
+                .{.rect = .{.x = 9 * 16, .y = 0, .width = 16, .height = 24}, .duration = 100},
+                .{.rect = .{.x = 10 * 16, .y = 0, .width = 16, .height = 24}, .duration = 80},
             },
             &.{// action
-                .{.rect = .{.x = 0 * 48, .y = 1 * 48, .width = 48, .height = 48}, .duration = 640},
-                .{.rect = .{.x = 1 * 48, .y = 1 * 48, .width = 48, .height = 48}, .duration = 80},
-                .{.rect = .{.x = 2 * 48, .y = 1 * 48, .width = 48, .height = 48}, .duration = 640},
-                .{.rect = .{.x = 1 * 48, .y = 1 * 48, .width = 48, .height = 48}, .duration = 80},
-            },
-            &.{// run down
-                .{.rect = .{.x = 0 * 48, .y = 2 * 48, .width = 48, .height = 48}, .duration = 120},
-                .{.rect = .{.x = 1 * 48, .y = 2 * 48, .width = 48, .height = 48}, .duration = 120},
-                .{.rect = .{.x = 2 * 48, .y = 2 * 48, .width = 48, .height = 48}, .duration = 120},
-                .{.rect = .{.x = 3 * 48, .y = 2 * 48, .width = 48, .height = 48}, .duration = 120},
-            },
-            &.{// run side
-                .{.rect = .{.x = 0 * 48, .y = 3 * 48, .width = 48, .height = 48}, .duration = 120},
-                .{.rect = .{.x = 1 * 48, .y = 3 * 48, .width = 48, .height = 48}, .duration = 120},
-                .{.rect = .{.x = 2 * 48, .y = 3 * 48, .width = 48, .height = 48}, .duration = 120},
-                .{.rect = .{.x = 3 * 48, .y = 3 * 48, .width = 48, .height = 48}, .duration = 120},
-            },
-            &.{// run up
-                .{.rect = .{.x = 0 * 48, .y = 4 * 48, .width = 48, .height = 48}, .duration = 120},
-                .{.rect = .{.x = 1 * 48, .y = 4 * 48, .width = 48, .height = 48}, .duration = 120},
-                .{.rect = .{.x = 2 * 48, .y = 4 * 48, .width = 48, .height = 48}, .duration = 120},
-                .{.rect = .{.x = 3 * 48, .y = 4 * 48, .width = 48, .height = 48}, .duration = 120},
-            },
-            &.{// attack down
-                .{.rect = .{.x = 0 * 48, .y = 5 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 1 * 48, .y = 5 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 2 * 48, .y = 5 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 3 * 48, .y = 5 * 48, .width = 48, .height = 48}, .duration = 100},
-            },
-            &.{// attack side
-                .{.rect = .{.x = 0 * 48, .y = 6 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 1 * 48, .y = 6 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 2 * 48, .y = 6 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 3 * 48, .y = 6 * 48, .width = 48, .height = 48}, .duration = 100},
-            },
-            &.{// attack up
-                .{.rect = .{.x = 0 * 48, .y = 7 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 1 * 48, .y = 7 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 2 * 48, .y = 7 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 3 * 48, .y = 7 * 48, .width = 48, .height = 48}, .duration = 100},
-            },
-            &.{// hit down
-                .{.rect = .{.x = 0 * 48, .y = 8 * 48, .width = 48, .height = 48}, .duration = 120},
-                .{.rect = .{.x = 1 * 48, .y = 8 * 48, .width = 48, .height = 48}, .duration = 80},
-                .{.rect = .{.x = 2 * 48, .y = 8 * 48, .width = 48, .height = 48}, .duration = 80},
-                .{.rect = .{.x = 0 * 48, .y = 8 * 48, .width = 48, .height = 48}, .duration = 80},
-            },
-            &.{// hit side
-                .{.rect = .{.x = 0 * 48, .y = 9 * 48, .width = 48, .height = 48}, .duration = 120},
-                .{.rect = .{.x = 1 * 48, .y = 9 * 48, .width = 48, .height = 48}, .duration = 80},
-                .{.rect = .{.x = 2 * 48, .y = 9 * 48, .width = 48, .height = 48}, .duration = 80},
-                .{.rect = .{.x = 0 * 48, .y = 9 * 48, .width = 48, .height = 48}, .duration = 80},
-            },
-            &.{// hit up
-                .{.rect = .{.x = 0 * 48, .y = 10 * 48, .width = 48, .height = 48}, .duration = 120},
-                .{.rect = .{.x = 1 * 48, .y = 10 * 48, .width = 48, .height = 48}, .duration = 80},
-                .{.rect = .{.x = 2 * 48, .y = 10 * 48, .width = 48, .height = 48}, .duration = 80},
-                .{.rect = .{.x = 0 * 48, .y = 10 * 48, .width = 48, .height = 48}, .duration = 80},
+                .{.rect = .{.x = 0 * 16, .y = 0, .width = 16, .height = 24}, .duration = 400},
             },
         }
     };
 }
 
-pub fn slime(x:f32, y:f32) T {
+pub fn box(x:f32, y:f32) T {
     return T {
-        .hp = 2,
-        .body = physics.world.addBody(Box.Body.init(.{ .x = x, .y = y }, .{ .x = 8.0, .y = 6.0 }, 2.0, 0.2)),
-        .renderer = .{ .texture = rl.LoadTexture("data/sprites/slime.png") },
+        .body = physics.world.addBody(Box.Body.init(.{ .x = x, .y = y }, .{ .x = 16.0, .y = 19.0 }, 2.0, 0.2)),
+        .renderer = .{ .texture = rl.LoadTexture("data/sprites/dungeon_tiles.png") },
         .animations = &.{
             &.{// idle
-                .{.rect = .{.x = 0 * 48, .y = 0, .width = 48, .height = 48}, .duration = 640},
-                .{.rect = .{.x = 1 * 48, .y = 0, .width = 48, .height = 48}, .duration = 80},
-                .{.rect = .{.x = 2 * 48, .y = 0, .width = 48, .height = 48}, .duration = 640},
-                .{.rect = .{.x = 1 * 48, .y = 0, .width = 48, .height = 48}, .duration = 80},
-            },
-            &.{// action
-                .{.rect = .{.x = 0 * 48, .y = 1 * 48, .width = 48, .height = 48}, .duration = 640},
-                .{.rect = .{.x = 1 * 48, .y = 1 * 48, .width = 48, .height = 48}, .duration = 80},
-                .{.rect = .{.x = 2 * 48, .y = 1 * 48, .width = 48, .height = 48}, .duration = 640},
-                .{.rect = .{.x = 1 * 48, .y = 1 * 48, .width = 48, .height = 48}, .duration = 80},
-            },
-            &.{// run down
-                .{.rect = .{.x = 0 * 48, .y = 2 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 1 * 48, .y = 2 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 2 * 48, .y = 2 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 3 * 48, .y = 2 * 48, .width = 48, .height = 48}, .duration = 100},
-            },
-            &.{// run side
-                .{.rect = .{.x = 0 * 48, .y = 3 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 1 * 48, .y = 3 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 2 * 48, .y = 3 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 3 * 48, .y = 3 * 48, .width = 48, .height = 48}, .duration = 100},
-            },
-            &.{// run up
-                .{.rect = .{.x = 0 * 48, .y = 4 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 1 * 48, .y = 4 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 2 * 48, .y = 4 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 3 * 48, .y = 4 * 48, .width = 48, .height = 48}, .duration = 100},
-            },
-            &.{// attack down
-                .{.rect = .{.x = 0 * 48, .y = 5 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 1 * 48, .y = 5 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 2 * 48, .y = 5 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 3 * 48, .y = 5 * 48, .width = 48, .height = 48}, .duration = 100},
-            },
-            &.{// attack side
-                .{.rect = .{.x = 0 * 48, .y = 6 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 1 * 48, .y = 6 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 2 * 48, .y = 6 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 3 * 48, .y = 6 * 48, .width = 48, .height = 48}, .duration = 100},
-            },
-            &.{// attack up
-                .{.rect = .{.x = 0 * 48, .y = 7 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 1 * 48, .y = 7 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 2 * 48, .y = 7 * 48, .width = 48, .height = 48}, .duration = 100},
-                .{.rect = .{.x = 3 * 48, .y = 7 * 48, .width = 48, .height = 48}, .duration = 100},
-            },
-            &.{// hit down
-                .{.rect = .{.x = 0 * 48, .y = 8 * 48, .width = 48, .height = 48}, .duration = 120},
-                .{.rect = .{.x = 1 * 48, .y = 8 * 48, .width = 48, .height = 48}, .duration = 80},
-                .{.rect = .{.x = 2 * 48, .y = 8 * 48, .width = 48, .height = 48}, .duration = 80},
-                .{.rect = .{.x = 0 * 48, .y = 8 * 48, .width = 48, .height = 48}, .duration = 80},
-            },
-            &.{// hit side
-                .{.rect = .{.x = 0 * 48, .y = 9 * 48, .width = 48, .height = 48}, .duration = 120},
-                .{.rect = .{.x = 1 * 48, .y = 9 * 48, .width = 48, .height = 48}, .duration = 80},
-                .{.rect = .{.x = 2 * 48, .y = 9 * 48, .width = 48, .height = 48}, .duration = 80},
-                .{.rect = .{.x = 0 * 48, .y = 9 * 48, .width = 48, .height = 48}, .duration = 80},
-            },
-            &.{// hit up
-                .{.rect = .{.x = 0 * 48, .y = 10 * 48, .width = 48, .height = 48}, .duration = 120},
-                .{.rect = .{.x = 1 * 48, .y = 10 * 48, .width = 48, .height = 48}, .duration = 80},
-                .{.rect = .{.x = 2 * 48, .y = 10 * 48, .width = 48, .height = 48}, .duration = 80},
-                .{.rect = .{.x = 0 * 48, .y = 10 * 48, .width = 48, .height = 48}, .duration = 80},
+                .{.rect = .{.x = 288, .y = 285, .width = 16, .height = 19}, .duration = 100},
             },
         }
     };

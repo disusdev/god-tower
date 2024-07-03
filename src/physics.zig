@@ -20,11 +20,24 @@ pub fn step(dt: f32) void {
     world.step(dt);
 }
 
+pub fn get_size(handle: Box.BodyHandle) rl.Vector2 {
+    if (world.bodies.get(handle)) |body| {
+        return rl.Vector2 {.x=body.width.x, .y=body.width.y};
+    }
+    return rl.Vector2Zero();
+}
+
 pub fn get_pos(handle: Box.BodyHandle) rl.Vector2 {
     if (world.bodies.get(handle)) |body| {
         return body.position.get();
     }
     return rl.Vector2Zero();
+}
+
+pub fn set_pos(handle: Box.BodyHandle, pos: rl.Vector2) void {
+    if (world.bodies.getPtr(handle)) |body| {
+        body.position.set(pos);
+    }
 }
 
 pub fn set_vel(handle: Box.BodyHandle, vel: rl.Vector2) void {
