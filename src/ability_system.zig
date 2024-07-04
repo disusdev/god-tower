@@ -4,6 +4,7 @@ const physics = @import("physics.zig");
 const Character = @import("character.zig");
 
 pub const MoveAbility = struct {
+    // controller => player[0..4], ai[0..4], 
     speed: f32 = 48.0,
 
     pub fn exec(self: MoveAbility, character: Character, move: rl.Vector2, speed: f32) void {

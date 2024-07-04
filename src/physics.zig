@@ -2,18 +2,26 @@ const std = @import("std");
 const rl = @import("rl.zig");
 const Box = @import("box2d.zig");
 
+pub const PhysicsBodyHandle = struct {
+    id: Box.BodyHandle,
+};
+
 pub var world: Box.World = undefined;
 
 pub fn init(allocator: std.mem.Allocator) void {
     world = Box.World {
         .gravity = Box.Vec2{ .x = 0, .y = 0 },
-        .iterations = 6,
+        .iterations = 12,
         .accumulateImpulses = true,
         .warmStarting = true,
         .positionCorrection = true,
         .bodies = Box.World.BodyMap.init(allocator),
         .arbiters = Box.World.ArbiterMap.init(allocator),
     };
+}
+
+pub fn create_body(x: f32, y: f32, w: f32, h: f32, m: f32, f: f32) PhysicsBodyHandle {
+    return .{ .id = world.addBody(Box.Body.init(.{ .x = x, .y = y }, .{ .x = w, .y = h }, m, f)) };
 }
 
 pub fn step(dt: f32) void {

@@ -6,6 +6,11 @@ const Box = @import("box2d.zig");
 const tracy = @import("tracy");
 const physics = @import("physics.zig");
 const RenderSystem = @import("render_system.zig");
+const ComponentSystem = @import("component_system.zig");
+const AbilitySystem = @import("ability_system.zig");
+const AnimationSystem = @import("animation_system.zig");
+
+// entity hierarchy
 
 const print = std.debug.print;
 
@@ -33,16 +38,16 @@ pub fn main() !void {
     const weapons_tex = rl.LoadTexture("data/sprites/weapons.png");
     defer rl.UnloadTexture(weapons_tex);
 
-    hero = Character.hero2(3 * 16 + 10, 2 * 16 + 8);
+    hero = try Character.hero2(3 * 16 + 10, 2 * 16 + 8);
     
     hero.weapon = try Character.Weapon.init(.{.x=0,.y=2}, &hero, weapons_tex, rl.Rectangle{.x=6,.y=9,.width=7,.height=16}, .{.x=3, .y=18});
     
     var enemies = std.ArrayList(Character).init(allocator);
     defer enemies.deinit();
     
-    try enemies.append(Character.hero2(3 * 16 + 10, 10 * 16 + 8));
-    try enemies.append(Character.hero2(4 * 16 + 10 - 4, 11 * 16 + 8 - 4));
-    try enemies.append(Character.hero2(2 * 16 + 10 + 4, 11 * 16 + 8 - 4));
+    try enemies.append(try Character.hero2(3 * 16 + 10, 10 * 16 + 8));
+    try enemies.append(try Character.hero2(4 * 16 + 10 - 4, 11 * 16 + 8 - 4));
+    try enemies.append(try Character.hero2(2 * 16 + 10 + 4, 11 * 16 + 8 - 4));
 
     map = Map.room_1();
     const coll_rects = try Map.get_collision_rects(allocator);
@@ -69,10 +74,44 @@ pub fn main() !void {
     
     camera.target = physics.get_pos(hero.body);
 
+    ComponentSystem.init(allocator);
+    AnimationSystem.init(allocator);
+
+    _ = try ComponentSystem.add_new_state();
+
+    //{
+        var gero_entity_handle = try ComponentSystem.Entity.create(null);
+        const gero_rendr_handle = try RenderSystem.add_renderer(.{ .texture = rl.LoadTexture("data/sprites/base.png"), . pivot = .{.x = 8, .y = 18 }});
+        const anim_handle = try AnimationSystem.add_animator(.{.renderer = gero_rendr_handle });
+        const physics_handle = physics.create_body(0, 0, 8, 12, 2, 0.2);
+
+        gero_rendr_handle.add_entity(gero_entity_handle);
+        gero_entity_handle.set_pos(0, 20);
+
+        try gero_entity_handle.add_component("renderer", ComponentSystem.Component{.renderer = gero_rendr_handle });
+        try gero_entity_handle.add_component("physics", ComponentSystem.Component{.physics = physics_handle });
+        try gero_entity_handle.add_component("animator", ComponentSystem.Component{.animator = anim_handle});
+        if (gero_entity_handle.get_component("animator")) |component| {
+            component.animator.play(hero.animations[0]);
+        }
+    //}
+
+    //{
+        var entity_handle = try ComponentSystem.Entity.create(gero_entity_handle.id);
+        const rendr_handle = try RenderSystem.add_renderer(.{ .texture = rl.LoadTexture("data/sprites/weapons.png"), .rect = rl.Rectangle{.x=6,.y=9,.width=7,.height=16}, .pivot = .{.x = 3, .y = 18 }});
+        rendr_handle.add_entity(entity_handle);
+        entity_handle.set_pos(0, 2);
+        try entity_handle.add_component("renderer", ComponentSystem.Component{.renderer = rendr_handle });
+    //}
+
+    gero_entity_handle.set_rot(90);
+
     while (!rl.WindowShouldClose()) {
         tracy.frameMark();
 
         const dt = rl.GetFrameTime();
+        
+        entity_handle.rotate(10 * dt);
 
         const wheel_move = rl.GetMouseWheelMove();
         if (@abs(wheel_move) > rl.EPSILON) {
@@ -87,6 +126,12 @@ pub fn main() !void {
         hero.attack.update(&hero, @floatCast(rl.atan2(mouse_dir.y, mouse_dir.x) * rl.RAD2DEG));
         const coef = rl.Vector2DotProduct(.{.x=1,.y=0}, .{.x=@cos(hero.weapon.?.rot * rl.DEG2RAD),.y=@sin(hero.weapon.?.rot * rl.DEG2RAD)});
         hero.weapon.?.coef = coef;
+
+        AnimationSystem.update(dt);
+
+        for (enemies.items) |*enemy| {
+            enemy.update_state(dt, enemies.items);
+        }
         
         // hero.weapon.?.rot += 1;
 
@@ -132,7 +177,9 @@ pub fn main() !void {
         
         hero.draw();
 
-        RenderSystem.draw();
+        const world_top = rl.GetScreenToWorld2D(.{.x=0,.y=0}, camera);
+        const world_bottom = rl.GetScreenToWorld2D(.{.x=0,.y=@floatFromInt(rl.GetScreenHeight())}, camera);
+        try RenderSystem.draw(world_top.y, world_bottom.y);
         
 
         if (rl.IsKeyDown(rl.KEY_C)) {

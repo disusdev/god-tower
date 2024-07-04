@@ -1,6 +1,5 @@
 const std = @import("std");
 const rl = @import("rl.zig");
-const Frame = @import("frame.zig");
 const Box = @import("box2d.zig");
 const Character = @import("character.zig");
 const T = @This();
@@ -83,10 +82,10 @@ const MapObject = struct {
 pub fn get_objects(allocator: std.mem.Allocator) !std.AutoHashMap(usize, Character) {
     var map = std.AutoHashMap(usize, Character).init(allocator);
 
-    try map.put(358, Character.box(0, 0));//std.math.inf(f32)
-    try map.put(378, Character.box(0, 0));
-    try map.put(380, Character.box(0, 0));
-    try map.put(328, Character.box(0, 0));
+    try map.put(358, try Character.box(0, 0));//std.math.inf(f32)
+    try map.put(378, try Character.box(0, 0));
+    try map.put(380, try Character.box(0, 0));
+    try map.put(328, try Character.box(0, 0));
 
     return map;
 }
