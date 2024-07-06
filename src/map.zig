@@ -2,10 +2,18 @@ const std = @import("std");
 const rl = @import("rl.zig");
 const Box = @import("box2d.zig");
 const Character = @import("character.zig");
+const RenderSystem = @import("render_system.zig");
+const Entities = @import("entities.zig");
+const ComponentSystem = @import("component_system.zig");
+const Physics = @import("physics.zig");
 const T = @This();
 
 texture: rl.Texture2D = undefined,
 layers: []const []const [] const usize = undefined,
+
+edit_mode: bool = true,
+edit_index: u64 = 0,
+edit_entity: ?ComponentSystem.EntityHandle = null,
 
 pub fn get_collision_rects(allocator: std.mem.Allocator) !std.AutoHashMap(usize, rl.Rectangle) {
     var map = std.AutoHashMap(usize, rl.Rectangle).init(allocator);
@@ -90,14 +98,14 @@ pub fn get_objects(allocator: std.mem.Allocator) !std.AutoHashMap(usize, Charact
     return map;
 }
 
-pub fn draw(self: T) void {
+pub fn draw(self: *T, camera: rl.Camera2D) !void {
     var rect: rl.Rectangle = undefined;
     for (self.layers) |layer| {
         for (layer, 0..) |colls, x| {
             for (colls, 0..) |tile_id, y| {
-                if (tile_id == 358 or
-                    tile_id == 378 or
-                    tile_id == 380) continue;
+                //if (tile_id == 358 or
+                //    tile_id == 378 or
+                //    tile_id == 380) continue;
                 rect.x = @floatFromInt(tile_id % 20);
                 rect.y = @floatFromInt(tile_id / 20);
                 rect.width = 16;
@@ -111,6 +119,46 @@ pub fn draw(self: T) void {
             }
         }
     }
+    
+    if (rl.IsKeyPressed(rl.KEY_P)) {
+        self.edit_mode = !self.edit_mode;
+    }
+    
+    // @todo draw edit mode
+    if (self.edit_mode) {
+        if (rl.IsKeyPressed(rl.KEY_TAB)) {
+            if (self.edit_entity == null) {
+                self.edit_entity = try Entities.box();
+            }
+        }
+        const mouse_pos = rl.GetMousePosition();
+        var world_pos = rl.GetScreenToWorld2D(mouse_pos, camera);
+        
+        // 
+        // rect.x = @floatFromInt(self.edit_index % 20);
+        // rect.y = @floatFromInt(self.edit_index / 20);
+        // rect.width = 16;
+        // rect.height = 16;
+        // 
+        
+        const x_left = @mod(world_pos.x, 8);
+        const y_left = @mod(world_pos.y, 8);
+        world_pos.x -= x_left;
+        world_pos.y -= y_left;
+        
+        if (self.edit_entity) |entity| {
+            entity.set_pos(world_pos.x, world_pos.y);
+            if (entity.get_component(Physics.PhysicsBodyHandle)) |body| {
+                body.set_pos(world_pos);
+            }
+        }
+        
+        if (rl.IsMouseButtonDown(0)) {
+            self.edit_entity = null;
+        }
+        
+        // rl.DrawTextureRec(self.texture, rect, world_pos, rl.WHITE);
+    }
 }
 
 pub fn get_center(self: T) rl.Vector2 {
@@ -119,6 +167,28 @@ pub fn get_center(self: T) rl.Vector2 {
         .y = @floatFromInt(self.layers[1].len * 8)
     };
 }
+
+//pub fn spawn(self: T) !void {
+//    var rect: rl.Rectangle = undefined;
+//    for (self.layers) |layer| {
+//        for (layer, 0..) |colls, x| {
+//            for (colls, 0..) |tile_id, y| {
+//                rect.x = @floatFromInt(tile_id % 20);
+//                rect.y = @floatFromInt(tile_id / 20);
+//                rect.width = 16;
+//                rect.height = 16;
+//                rect.x *= rect.width;
+//                rect.y *= rect.height;
+//                var pos = rl.Vector2 { .x = @floatFromInt(y), .y = @floatFromInt(x) };
+//                pos.x *= rect.width;
+//                pos.y *= rect.height;
+//                
+//                // rl.DrawTextureRec(self.texture, rect, pos, rl.WHITE);
+//                _ = try RenderSystem.add_renderer(.{ .transform = .{ .position = pos }, .texture = self.texture, .pivot = .{.x = 0, .y = 0 }, .rect = rect});
+//            }
+//        }
+//    }
+//}
 
 pub fn room_1() T {
     return T {
@@ -143,37 +213,37 @@ pub fn room_1() T {
                 &.{98,95,95,95,95,95,97},
             },
             &.{// wall
-                &.{60,60,347,333,348,60},
-                &.{60,60,367,353,368,60},
-                &.{60,345,60,60,60,345},
-                &.{60,365,60,60,60,365},
-                &.{60,345,60,60,60,345},
-                &.{60,365,60,60,60,365},
-                &.{60,357,357,357,358,357},
-                &.{60,377,377,377,378,377},
-                &.{60,345,60,60,60,345},
-                &.{60,365,60,60,60,365},
-                &.{60,345,60,60,60,345},
-                &.{60,365,60,60,60,365},
-                &.{60,345,60,60,60,345},
-                &.{60,365,60,60,60,365},
+                //&.{60,60,347,333,348,60},
+                //&.{60,60,367,353,368,60},
+                //&.{60,345,60,60,60,345},
+                //&.{60,365,60,60,60,365},
+                //&.{60,345,60,60,60,345},
+                //&.{60,365,60,60,60,365},
+                //&.{60,357,357,357,358,357},
+                //&.{60,377,377,377,378,377},
+                //&.{60,345,60,60,60,345},
+                //&.{60,365,60,60,60,365},
+                //&.{60,345,60,60,60,345},
+                //&.{60,365,60,60,60,365},
+                //&.{60,345,60,60,60,345},
+                //&.{60,365,60,60,60,365},
             },
             &.{// decor
-                &.{60,60,60,60,60,60},
-                &.{60,60,354,60,355,60},
-                &.{60,60,374,60,375,60},
-                &.{60,302,60,60,60,302},
-                &.{60,322,60,60,60,322},
-                &.{60,302,60,60,60,302},
-                &.{60,322,60,60,60,322},
-                &.{60,60,60,60,60,60},
-                &.{60,60,60,60,60,60},
-                &.{60,302,60,380,60,302},
-                &.{60,322,60,60,60,322},
-                &.{60,302,280,280,280,302},
-                &.{60,322,60,60,60,322},
-                &.{60,302,60,308,60,304},
-                &.{60,322,60,328,60,324},
+                //&.{60,60,60,60,60,60},
+                //&.{60,60,354,60,355,60},
+                //&.{60,60,374,60,375,60},
+                //&.{60,302,60,60,60,302},
+                //&.{60,322,60,60,60,322},
+                //&.{60,302,60,60,60,302},
+                //&.{60,322,60,60,60,322},
+                //&.{60,60,60,60,60,60},
+                //&.{60,60,60,60,60,60},
+                //&.{60,302,60,380,60,302},
+                //&.{60,322,60,60,60,322},
+                //&.{60,302,280,280,280,302},
+                //&.{60,322,60,60,60,322},
+                //&.{60,302,60,308,60,304},
+                //&.{60,322,60,328,60,324},
             },
         },
         .texture = rl.LoadTexture("data/sprites/dungeon_tiles.png"),

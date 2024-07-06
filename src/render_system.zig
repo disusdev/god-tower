@@ -9,6 +9,7 @@ pub const Transform = struct {
 };
 
 pub const Renderer = struct {
+    enable: bool = true,
     texture: rl.Texture2D = undefined,
     rect: rl.Rectangle = undefined,
     pivot: rl.Vector2 = rl.Vector2Zero(),
@@ -37,7 +38,7 @@ pub const Renderer = struct {
                           self.tint);
         // var depth_str: [128:0]u8 = std.mem.zeroes([128:0]u8);
         // const depth_slice = try std.fmt.bufPrint(&depth_str, "{d:.3}", .{self.depth});
-        // rl.DrawTextEx(rl.GetFontDefault(), @ptrCast(depth_slice.ptr), self.transform.position, 18, 0.5, rl.WHITE);
+        // rl.DrawTextEx(rl.GetFontDefault(), @ptrCast(depth_slice.ptr), pos, 18, 0.5, rl.WHITE);
     }
 };
 

@@ -62,7 +62,7 @@ pub const Weapon = struct {
     pub fn update(self: *Weapon, progres: f32) void {
         // var renderer = self.renderer.draw();
 
-        const target_pos = physics.get_pos(self.target.body);
+        const target_pos = rl.Vector2Zero();// physics.get_pos(self.target.body);
         const dst_rect = .{
             .x = target_pos.x+self.pos.y,
             .y = target_pos.y+self.pos.y,
@@ -79,10 +79,10 @@ pub const Weapon = struct {
 
 weapon: ?Weapon = null,
 
-body: Box.BodyHandle = undefined,
+// body: Box.BodyHandle = undefined,
 
-move: AbilitySystem.MoveAbility = .{},
-attack: AbilitySystem.AttackAbility = .{},
+// move: AbilitySystem.MoveAbility = .{},
+// attack: AbilitySystem.AttackAbility = .{},
 
 stat_points: u32 = 0,
 stats: Attributes = undefined,
@@ -154,7 +154,7 @@ pub fn set_animation(self: *T, state: AnimationState, dir: Direction) void {
 pub fn draw(self: *T) void {
     if (self.dead) return;
 
-    const pos = physics.get_pos(self.body);
+    // const pos = physics.get_pos(self.body);
 
     self.set_animation(self.animator.state, self.dir);
 
@@ -164,7 +164,7 @@ pub fn draw(self: *T) void {
     // rl.DrawTextureRec(self.renderer.texture, rect, .{ .x=pos.x-@abs(self.animator.current_anim[self.animator.frame_idx].rect.width)/2, .y=pos.y-6-@abs(self.animator.current_anim[self.animator.frame_idx].rect.height)/2 }, rl.WHITE);
     {
         self.renderer_handle.set_rect(rect);
-        self.renderer_handle.set_pos(pos);
+        //self.renderer_handle.set_pos(pos);
     }
 
 
@@ -181,35 +181,41 @@ pub fn draw(self: *T) void {
         self.animator.frame_time = 0.0;
     }
     
-    if (self.weapon) |*w| {
-        w.rot = self.attack.angle + 90;
-    }
+    //if (self.weapon) |*w| {
+    //    w.rot = self.attack.angle + 90;
+    //}
     
     //rl.DrawLineV(self.attack.attack_line[0], self.attack.attack_line[1], rl.GREEN);
 }
 
 pub fn update_state(self: *T, dt: f32, characters: [] T) void {
+    _ = dt;
+    _ = characters;
+
     if (self.animator.state == .Hit) {
         return;
     }
 
-    self.move.exec(self.*, rl.Vector2Zero(), if(self.animator.state == .Attack) 0.5 else 1);
+    // self.move.exec(self.*, rl.Vector2Zero(), if(self.animator.state == .Attack) 0.5 else 1);
 
-    self.attack.step(self, characters, dt);
-    if (self.weapon) |*w| {
-        w.update(self.attack.attack_progress);
-    }
+    //self.attack.step(characters, dt);
+    //if (self.weapon) |*w| {
+    //    w.update(self.attack.attack_progress);
+    //}
 }
 
 pub fn update(self: *T, dt: f32, characters: [] T) void {
+    _ = dt;
+    _ = characters;
+    
     if (self.animator.state == .Hit) {
         return;
     }
 
-    self.attack.step(self, characters, dt);
-    if (self.weapon) |*w| {
-        w.update(self.attack.attack_progress);
-    }
+    //self.attack.step(characters, dt);
+    //if (self.weapon) |*w| {
+    //    w.update(self.attack.attack_progress);
+    //}
 
     var axis = rl.Vector2 {
         .x = rl.GetGamepadAxisMovement(0, 0),
@@ -234,7 +240,7 @@ pub fn update(self: *T, dt: f32, characters: [] T) void {
         self.dir = .Down;
     }
 
-    self.move.exec(self.*, axis, if(self.animator.state == .Attack) 0.5 else 1);
+    // self.move.exec(self.*, axis, if(self.animator.state == .Attack) 0.5 else 1);
     
     if (self.animator.state != .Attack) {
         if (rl.IsKeyPressed(rl.KEY_RIGHT_CONTROL) or
@@ -242,10 +248,10 @@ pub fn update(self: *T, dt: f32, characters: [] T) void {
             rl.IsGamepadButtonPressed(0, rl.GAMEPAD_BUTTON_RIGHT_FACE_LEFT) or
             rl.IsMouseButtonPressed(0)) {
             self.animator.state = .Attack;
-            self.attack.exec(self);
-            physics.set_vel(self.body, rl.Vector2Zero());
-        } else if (rl.Vector2Length(physics.get_vel(self.body)) > 0.1) {
-            self.animator.state = .Move;
+            //self.attack.exec();
+            //physics.set_vel(self.body, rl.Vector2Zero());
+        //} else if (rl.Vector2Length(physics.get_vel(self.body)) > 0.1) {
+        //    self.animator.state = .Move;
         } else {
             self.animator.state = .Idle;
         }
@@ -254,8 +260,8 @@ pub fn update(self: *T, dt: f32, characters: [] T) void {
 
 pub fn hero2(x:f32, y:f32) !T {
     return T {
-        .body = physics.world.addBody(Box.Body.init(.{ .x = x, .y = y }, .{ .x = 8.0, .y = 12.0 }, 2.0, 0.2)),
-        .renderer = .{ .texture = rl.LoadTexture("data/sprites/base.png"), .pivot = .{.x = 5, .y = 11 } },
+        //.body = physics.world.addBody(Box.Body.init(.{ .x = x, .y = y }, .{ .x = 8.0, .y = 12.0 }, 2.0, 0.2)),
+        .renderer = .{ .transform = .{.position = .{.x=x,.y=y}}, .texture = rl.LoadTexture("data/sprites/base.png"), .pivot = .{.x = 5, .y = 11 } },
         .renderer_handle = try RenderSystem.add_renderer(.{ .texture = rl.LoadTexture("data/sprites/base.png"), .pivot = .{.x = 8, .y = 18 } }),
         .animations = &.{
             &.{// idle
@@ -279,8 +285,8 @@ pub fn hero2(x:f32, y:f32) !T {
 
 pub fn box(x:f32, y:f32) !T {
     return T {
-        .body = physics.world.addBody(Box.Body.init(.{ .x = x, .y = y }, .{ .x = 16.0, .y = 19.0 }, 2.0, 0.2)),
-        .renderer = .{ .texture = rl.LoadTexture("data/sprites/dungeon_tiles.png"), .pivot = .{.x=8,.y=9.5} },
+        //.body = physics.world.addBody(Box.Body.init(.{ .x = x, .y = y }, .{ .x = 16.0, .y = 19.0 }, 2.0, 0.2)),
+        .renderer = .{ .transform = .{.position = .{.x=x,.y=y}}, .texture = rl.LoadTexture("data/sprites/dungeon_tiles.png"), .pivot = .{.x=8,.y=9.5} },
         .renderer_handle = try RenderSystem.add_renderer(.{ .texture = rl.LoadTexture("data/sprites/dungeon_tiles.png"), .pivot = .{.x=8,.y=9.5} }),
         .animations = &.{
             &.{// idle

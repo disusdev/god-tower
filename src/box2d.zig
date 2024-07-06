@@ -16,6 +16,7 @@
 
 const std = @import("std");
 const rl = @import("rl.zig");
+const ComponentSystem = @import("component_system.zig");
 
 pub const World = struct {
     // options
@@ -94,6 +95,12 @@ pub const World = struct {
         // Integrate forces.
         for (self.bodies.values()) |*b| {
             if (b.invMass == 0.0) continue;
+            
+            const dragForce = Vec2 { .x = -b.drag_coef * b.velocity.x, .y = -b.drag_coef * b.velocity.y };
+
+            // Apply the drag force
+            b.force.x += dragForce.x;
+            b.force.y += dragForce.y;
 
             b.velocity = b.velocity.add(self.gravity.add(b.force.mulF32(b.invMass)).mulF32(dt));
             b.angularVelocity += b.invInertia * b.torque * dt;
@@ -115,10 +122,13 @@ pub const World = struct {
         // Integrate Velocities
         for (self.bodies.values()) |*b| {
             b.position = b.position.add(b.velocity.mulF32(dt));
-            b.rotation += b.angularVelocity * dt;
+            // b.rotation += b.angularVelocity * dt;
 
             b.force = Vec2{ .x = 0, .y = 0 };
             b.torque = 0.0;
+            
+            b.entity.set_pos(b.position.x,b.position.y);
+            // @todo: add rotation
         }
     }
 };
@@ -127,6 +137,7 @@ pub const BodyHandleInvalid: BodyHandle = std.math.maxInt(BodyHandle);
 pub const BodyHandle = u32;
 
 pub const Body = struct {
+    entity: ComponentSystem.EntityHandle,
     position: Vec2,
     rotation: f32,
     velocity: Vec2,
@@ -139,9 +150,11 @@ pub const Body = struct {
     invMass: f32,
     inertia: f32,
     invInertia: f32,
+    drag_coef: f32,
 
-    pub fn init(pos: Vec2, w: Vec2, m: f32, f: f32) Body {
+    pub fn init(entity: ComponentSystem.EntityHandle, pos: Vec2, w: Vec2, m: f32, f: f32, c: f32) Body {
         var result: Body = Body{
+            .entity = entity,
             .position = pos,
             .rotation = 0.0,
             .velocity = .{ .x = 0.0, .y = 0.0 },
@@ -151,6 +164,7 @@ pub const Body = struct {
             .friction = f,
             .width = w,
             .mass = m,
+            .drag_coef = c,
 
             .invMass = undefined,
             .inertia = undefined,
@@ -313,8 +327,8 @@ pub fn collide(contacts: *[MAX_POINTS]Contact, bodyA: *const Body, bodyB: *const
     const posA = bodyA.position;
     const posB = bodyB.position;
 
-    const RotA = Mat22.initAngle(bodyA.rotation);
-    const RotB = Mat22.initAngle(bodyB.rotation);
+    const RotA = Mat22.initAngle(0);// rotation
+    const RotB = Mat22.initAngle(0);
 
     const RotAT = RotA.transpose();
     const RotBT = RotB.transpose();
