@@ -31,7 +31,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const exe = b.addExecutable(.{
-        .name = "got-tower",
+        .name = "god-tower",
         .root_source_file = b.path("src/game.zig"),
         .target = target,
         .optimize = optimize,

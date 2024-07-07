@@ -43,6 +43,14 @@ pub fn hero(x: f32, y: f32) !ComponentSystem.EntityHandle {
     entity.add_component(AnimationSystem.AnimatorHandle, animator);    
     entity.add_component(AnimationSystem.AnimatorControllerHandle, controller);
     
+    const weapon_slot = try ComponentSystem.Entity.create(entity.id);
+    
+    const attack_handle = try AbilitySystem.add_attack(.{
+        .owner = entity,
+        .weapon_slot = weapon_slot
+    });
+    weapon_slot.add_component(AbilitySystem.AttackAbilityHandle, attack_handle);
+    
     return entity;
 }
 

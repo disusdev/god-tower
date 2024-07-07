@@ -131,8 +131,8 @@ pub const AttackAbility = struct {
     
     // @todo weapon should be an entity, with mb some weapon logic on it
     owner: ComponentSystem.EntityHandle,
-    weapon_slot: ?ComponentSystem.EntityHandle = null,
-    weapon: ComponentSystem.EntityHandle = undefined,
+    weapon_slot: ComponentSystem.EntityHandle = undefined,
+    weapon: ?ComponentSystem.EntityHandle = null,
     input: InputController = .{},
 
     attack_damage: u32 = 1,
@@ -174,11 +174,13 @@ pub const AttackAbility = struct {
         self.attack_line[1].x += self.attack_line[0].x;
         self.attack_line[1].y += self.attack_line[0].y;
         
-        self.weapon_slot.?.set_rot(self.angle + 90);
+        self.weapon_slot.set_rot(self.angle + 90);
         
         const mul: f32 = if (self.front) 1 else -1;
         const child_rot = rl.Lerp(-90 * mul, 90 * mul, self.attack_progress);
-        self.weapon.set_rot(child_rot);
+        if (self.weapon) |weapon| {
+            weapon.set_rot(child_rot);
+        }
         
         if (self.attack_progress == 1) {
             self.play = false;
@@ -225,11 +227,13 @@ pub const AttackAbility = struct {
         self.attack_line[1].x += self.attack_line[0].x;
         self.attack_line[1].y += self.attack_line[0].y;
         
-        self.weapon_slot.?.set_rot(self.angle + 90);
+        self.weapon_slot.set_rot(self.angle + 90);
         
         const mul: f32 = if (self.front) -1 else 1;
         const child_rot = rl.Lerp(-90 * mul, 90 * mul, self.attack_progress);
-        self.weapon.set_rot(child_rot);
+        if (self.weapon) |weapon| {
+            weapon.set_rot(child_rot);
+        }
         
         if (self.input.get_action()) {
             self.front = !self.front;
@@ -237,7 +241,7 @@ pub const AttackAbility = struct {
     }
 
     pub fn exec(self: *AttackAbility) void {
-        if (self.play or self.weapon_slot == null) return;
+        if (self.play or self.weapon == null) return;
 
         self.attack_progress = 0.0;
 
@@ -275,6 +279,10 @@ pub const MoveAbilityHandle = struct {
 
 pub const AttackAbilityHandle = struct {
     id: u64,
+    
+    pub fn set_weapon(self: AttackAbilityHandle, entity: ?ComponentSystem.EntityHandle) void {
+        attack_abilities.items[self.id].weapon = entity;
+    }
 };
 
 pub const FrictionAbilityHandle = struct {
