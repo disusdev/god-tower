@@ -51,6 +51,19 @@ pub const Entity = struct {
 pub const EntityHandle = struct {
     id: u64,
     
+    pub fn set_parent(self: EntityHandle, other: ?EntityHandle) void {
+        // @todo make it work with siblings
+        if (states.items[current_state].entities.items[self.id].hierarchy.parent_id) |id| {
+            states.items[current_state].entities.items[id].hierarchy.first_child = self.id;
+        }
+        if (other) |o| {
+            states.items[current_state].entities.items[self.id].hierarchy.parent_id = o.id;
+            states.items[current_state].entities.items[o.id].hierarchy.first_child = self.id;
+        } else {
+            states.items[current_state].entities.items[self.id].hierarchy.parent_id = null;
+        }
+    }
+    
     pub inline fn get_component(self: EntityHandle, comptime T: type) ?T {
         if (states.items[current_state].entities.items[self.id].components.get(@typeName(T))) |id| {
             return T {

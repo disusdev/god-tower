@@ -83,14 +83,8 @@ pub fn main() !void {
 
     const gero_entity_handle = try Entities.hero(56, 40);
     
-    if (gero_entity_handle.get_child()) |weapon_slot| {
-        const entity_handle = try Weapons.stick(weapon_slot);
-        if (weapon_slot.get_component(AbilitySystem.AttackAbilityHandle)) |attack| {
-            attack.set_weapon(entity_handle);
-        }
-    }
-    
-    _ = try Weapons.sword(null);
+    const stick_entity = try Weapons.stick(null);
+    const sword_entity = try Weapons.sword(null);
     
     var timer: f64 = 0.0;
     var current: f64 = 0.0;
@@ -101,6 +95,20 @@ pub fn main() !void {
     const FIXED_TIME = 1.0 / 60.0;
 
     while (!rl.WindowShouldClose()) {
+        if (rl.IsKeyPressed(rl.KEY_ONE)) {
+            if (gero_entity_handle.get_child()) |weapon_slot| {
+                if (weapon_slot.get_component(AbilitySystem.AttackAbilityHandle)) |attack| {
+                    attack.set_weapon(stick_entity);
+                }
+            }
+        } else if (rl.IsKeyPressed(rl.KEY_TWO)) {
+            if (gero_entity_handle.get_child()) |weapon_slot| {
+                if (weapon_slot.get_component(AbilitySystem.AttackAbilityHandle)) |attack| {
+                    attack.set_weapon(sword_entity);
+                }
+            }
+        }
+    
         tracy.frameMark();
         
         fresh = rl.GetTime();

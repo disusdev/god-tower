@@ -78,7 +78,6 @@ pub const InputController = struct {
 };
 
 pub const MoveAbility = struct {
-    // controller => player[0..4], ai[0..4],
     body: Physics.PhysicsBodyHandle,
     input: InputController = .{},
     speed: f32 = 48.0,
@@ -87,20 +86,13 @@ pub const MoveAbility = struct {
         var velocity = self.input.get_axis();
         velocity = rl.Vector2Scale(rl.Vector2Normalize(velocity), self.speed);
         
-        // const real_velocity = self.body.get_vel();
-        // velocity.x -= real_velocity.x * -0.2;
-        // velocity.y -= real_velocity.y * -0.2;
-        
         self.body.set_vel(velocity);
     }
 };
 
 pub const Brain = struct {
-    // controller => player[0..4], ai[0..4],
     body: Physics.PhysicsBodyHandle,
-    // input: InputController = .{},
     speed: f32 = 48.0,
-    // state: State = .Idle,
     timer: f32 = 0.0,
     dir: rl.Vector2 = rl.Vector2Zero(),
 
@@ -116,10 +108,6 @@ pub const Brain = struct {
     
         var velocity = self.dir;
         velocity = rl.Vector2Scale(rl.Vector2Normalize(velocity), self.speed);
-        
-        // const real_velocity = self.body.get_vel();
-        // velocity.x -= real_velocity.x * -0.2;
-        // velocity.y -= real_velocity.y * -0.2;
         
         self.body.set_vel(velocity);
     }
@@ -281,6 +269,12 @@ pub const AttackAbilityHandle = struct {
     id: u64,
     
     pub fn set_weapon(self: AttackAbilityHandle, entity: ?ComponentSystem.EntityHandle) void {
+        if (attack_abilities.items[self.id].weapon) |e| {
+            e.set_parent(null);
+        }
+        if (entity) |e| {
+            e.set_parent(attack_abilities.items[self.id].weapon_slot);
+        }
         attack_abilities.items[self.id].weapon = entity;
     }
 };
@@ -308,7 +302,7 @@ pub var move_abilities: std.ArrayList(MoveAbility) = undefined;
 pub var attack_abilities: std.ArrayList(AttackAbility) = undefined;
 pub var friction_abilities: std.ArrayList(FrictionAbility) = undefined;
 pub var brains: std.ArrayList(Brain) = undefined;
-// pub var controller_abilities: std.ArrayList(Controller) = undefined;
+// pub var controllers: std.ArrayList(Controller) = undefined;
 
 pub fn init(allocator: std.mem.Allocator) void {
     move_abilities = std.ArrayList(MoveAbility).init(allocator);
@@ -333,7 +327,7 @@ pub fn add_friction(ability: FrictionAbility) !FrictionAbilityHandle {
 }
 
 pub fn update(camera: rl.Camera2D, dt: f32) void {
-    // for (controller_abilities.items) |*controller| {
+    // for (controllers.items) |*controller| {
     //     controller.update();
     // }
 
@@ -345,21 +339,9 @@ pub fn update(camera: rl.Camera2D, dt: f32) void {
         brain.exec();
     }
     
-    // for (move_abilities.items) |move| {
-    //     move.step(dt);
-    // }
-    
     for (attack_abilities.items) |*attack| {
         attack.update(camera, dt);
     }
-    
-    // for (friction_abilities.items) |friction| {
-    //     var velocity = friction.body.get_vel();
-    //     //const length = rl.Vector2Length(velocity);
-    //     velocity.x -= velocity.x;// * -0.2;// * length;
-    //     velocity.y -= velocity.y;// * -0.2;// * length;
-    //     friction.body.set_vel(velocity);
-    // }
 }
 
 pub fn draw() !void {
