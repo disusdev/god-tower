@@ -42,6 +42,10 @@ pub fn hero(x: f32, y: f32) !ComponentSystem.EntityHandle {
     entity.add_component(AbilitySystem.MoveAbilityHandle, move);
     entity.add_component(AnimationSystem.AnimatorHandle, animator);    
     entity.add_component(AnimationSystem.AnimatorControllerHandle, controller);
+    entity.add_component(AbilitySystem.StatsHandle, AbilitySystem.StatsHandle.create(.{
+        .hp = 100,
+        .owner = entity,
+    }));
     
     const weapon_slot = try ComponentSystem.Entity.create(entity.id);
     
@@ -80,6 +84,10 @@ pub fn enemy(x: f32, y: f32) !ComponentSystem.EntityHandle {
     entity.add_component(AbilitySystem.BrainHandle, brain);
     entity.add_component(AnimationSystem.AnimatorHandle, animator);    
     entity.add_component(AnimationSystem.AnimatorControllerHandle, controller);
+    entity.add_component(AbilitySystem.StatsHandle, AbilitySystem.StatsHandle.create(.{
+        .hp = 30,
+        .owner = entity,
+    }));
     
     return entity;
 }

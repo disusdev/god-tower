@@ -51,6 +51,14 @@ pub const Entity = struct {
 pub const EntityHandle = struct {
     id: u64,
     
+    pub fn set_enable(self: EntityHandle, enable: bool) void {
+        states.items[current_state].entities.items[self.id].enable = enable;
+    }
+    
+    pub fn get_enable(self: EntityHandle) bool {
+        return states.items[current_state].entities.items[self.id].enable;
+    }
+    
     pub fn set_parent(self: EntityHandle, other: ?EntityHandle) void {
         // @todo make it work with siblings
         if (states.items[current_state].entities.items[self.id].hierarchy.parent_id) |id| {

@@ -1,6 +1,5 @@
 const std = @import("std");
 const rl = @import("rl.zig");
-const Character = @import("character.zig");
 const ComponentSystem = @import("component_system.zig");
 
 pub const Transform = struct {
@@ -9,7 +8,6 @@ pub const Transform = struct {
 };
 
 pub const Renderer = struct {
-    enable: bool = true,
     texture: rl.Texture2D = undefined,
     rect: rl.Rectangle = undefined,
     pivot: rl.Vector2 = rl.Vector2Zero(),
@@ -19,6 +17,11 @@ pub const Renderer = struct {
     entity: ?ComponentSystem.EntityHandle = null,
 
     pub fn draw(self: Renderer) !void {
+        if (self.entity) |entity| {
+            if (!entity.get_enable()) {
+                return;
+            }
+        }
         var pos = self.transform.position;
         var rot = self.transform.rotation;
         if (self.entity) |entity| {

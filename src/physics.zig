@@ -31,6 +31,10 @@ pub const PhysicsBodyHandle = struct {
             body.position.set(pos);
         }
     }
+    
+    pub fn destroy(self: PhysicsBodyHandle) void {
+        world.bodies.swapRemove(self.id);
+    }
 };
 
 pub var world: Box.World = undefined;

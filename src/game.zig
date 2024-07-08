@@ -1,6 +1,5 @@
 const std = @import("std");
 const rl = @import("rl.zig");
-const Character = @import("character.zig");
 const Map = @import("map.zig");
 const Box = @import("box2d.zig");
 const tracy = @import("tracy");

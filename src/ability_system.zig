@@ -1,7 +1,6 @@
 const std = @import("std");
 const rl = @import("rl.zig");
 const Physics = @import("physics.zig");
-const Character = @import("character.zig");
 const ComponentSystem = @import("component_system.zig");
 
 
@@ -113,6 +112,47 @@ pub const Brain = struct {
     }
 };
 
+pub const Stats = struct {
+    owner: ComponentSystem.EntityHandle,
+    hp: i32,
+    last_seed: i8 = -1,
+    
+     pub fn damage(self: *Stats, dmg: u32, seed: i8) u32 {
+        if (self.last_seed == seed) return 0;
+        // @todo impulse entity back, if it got physics
+        //       white flash for renderer
+        self.hp -= @intCast(dmg);
+        if (self.hp <= 0) {
+            self.owner.set_enable(false);
+        }
+        return dmg;
+    }
+};
+
+pub const StatsHandle = struct {
+    id: u64,
+    
+    pub fn create(stat: Stats) StatsHandle {
+        stats.append(stat) catch {
+            @panic("stats_create");
+        };
+        return .{
+            .id = stats.items.len,
+        };
+    }
+    
+    pub fn damage(self: *StatsHandle, dmg: u32, seed: i8) u32 {
+        if (stats.items[self.id].last_seed == seed) return 0;
+        // @todo impulse entity back, if it got physics
+        //       white flash for renderer
+        stats.items[self.id].hp -= dmg;
+        if (stats.items[self.id].hp <= 0) {
+            stats.items[self.id].owner.set_enable(false);
+        }
+        return dmg;
+    }
+};
+
 pub const AttackAbility = struct {
     // @todo should have weapon slot, to perform attack with it
     //       no weapon in slot, no attack
@@ -175,12 +215,20 @@ pub const AttackAbility = struct {
         }
     }
     
-    pub fn attack_solve(self: AttackAbility, other: *Character) u32 {
-        const other_pos = rl.Vector2Zero();
+    pub fn attack_solve(self: AttackAbility, other: *Stats) u32 {
+        const other_pos = other.owner.get_pos();
         if (CheckCollisionLineCircle(self.attack_line[0], self.attack_line[1], other_pos, 8.0)) {
             return other.damage(self.attack_damage, self.seed);
         }
         return 0;
+    }
+    
+    pub fn update_solver(self: AttackAbility) void {
+        if (!self.play) return;
+        for (stats.items) |*stat| {
+            if (stat.owner.id == self.owner.id) continue;
+            _ = self.attack_solve(stat);
+        }
     }
 
     pub fn update(self: *AttackAbility, camera: rl.Camera2D, dt: f32) void {        
@@ -302,6 +350,7 @@ pub var move_abilities: std.ArrayList(MoveAbility) = undefined;
 pub var attack_abilities: std.ArrayList(AttackAbility) = undefined;
 pub var friction_abilities: std.ArrayList(FrictionAbility) = undefined;
 pub var brains: std.ArrayList(Brain) = undefined;
+pub var stats: std.ArrayList(Stats) = undefined;
 // pub var controllers: std.ArrayList(Controller) = undefined;
 
 pub fn init(allocator: std.mem.Allocator) void {
@@ -309,6 +358,7 @@ pub fn init(allocator: std.mem.Allocator) void {
     attack_abilities = std.ArrayList(AttackAbility).init(allocator);
     friction_abilities = std.ArrayList(FrictionAbility).init(allocator);
     brains = std.ArrayList(Brain).init(allocator);
+    stats = std.ArrayList(Stats).init(allocator);
 }
 
 pub fn add_move(ability: MoveAbility) !MoveAbilityHandle {
@@ -341,6 +391,10 @@ pub fn update(camera: rl.Camera2D, dt: f32) void {
     
     for (attack_abilities.items) |*attack| {
         attack.update(camera, dt);
+    }
+    
+    for (attack_abilities.items) |attack| {
+        attack.update_solver();
     }
 }
 

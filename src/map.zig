@@ -1,7 +1,6 @@
 const std = @import("std");
 const rl = @import("rl.zig");
 const Box = @import("box2d.zig");
-const Character = @import("character.zig");
 const RenderSystem = @import("render_system.zig");
 const Entities = @import("entities.zig");
 const ComponentSystem = @import("component_system.zig");
@@ -86,17 +85,6 @@ const MapObject = struct {
 
 //     return map;
 // }
-
-pub fn get_objects(allocator: std.mem.Allocator) !std.AutoHashMap(usize, Character) {
-    var map = std.AutoHashMap(usize, Character).init(allocator);
-
-    try map.put(358, try Character.box(0, 0));//std.math.inf(f32)
-    try map.put(378, try Character.box(0, 0));
-    try map.put(380, try Character.box(0, 0));
-    try map.put(328, try Character.box(0, 0));
-
-    return map;
-}
 
 pub fn draw(self: *T, camera: rl.Camera2D) !void {
     var rect: rl.Rectangle = undefined;

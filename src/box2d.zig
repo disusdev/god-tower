@@ -65,8 +65,10 @@ pub const World = struct {
     fn broadPhase(self: *@This()) void {
         // O(n^2) broad-phase
         for (self.bodies.values(), 0..) |*bi, i| {
+            if (!bi.entity.get_enable()) continue;
             // for (int j = i + 1; j < (int)bodies.size(); ++j) {
             for (self.bodies.values()[i + 1 ..]) |*bj| {
+                if (!bj.entity.get_enable()) continue;
                 if (bi.invMass == 0.0 and bj.invMass == 0.0) continue;
 
                 const newArb = Arbiter.init(bi, bj);
@@ -94,6 +96,7 @@ pub const World = struct {
 
         // Integrate forces.
         for (self.bodies.values()) |*b| {
+            if (!b.entity.get_enable()) continue;
             if (b.invMass == 0.0) continue;
             
             const dragForce = Vec2 { .x = -b.drag_coef * b.velocity.x, .y = -b.drag_coef * b.velocity.y };
@@ -121,6 +124,8 @@ pub const World = struct {
 
         // Integrate Velocities
         for (self.bodies.values()) |*b| {
+            if (!b.entity.get_enable()) continue;
+            
             b.position = b.position.add(b.velocity.mulF32(dt));
             // b.rotation += b.angularVelocity * dt;
 
