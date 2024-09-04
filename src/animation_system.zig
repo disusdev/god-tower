@@ -26,6 +26,7 @@ pub const AnimatorController = struct {
     body: Physics.PhysicsBodyHandle,
     animator: AnimatorHandle,
     renderer: RenderSystem.RendererHandle,
+    animations: []const Animation,
 
     last_idx: u64 = 0,
     
@@ -70,7 +71,7 @@ pub const AnimatorController = struct {
         const id: u64 = if (rl.Vector2Length(axis) > rl.EPSILON) 1 else 0;
         if (self.last_idx != id or !self.animator.is_playing()) {
             self.last_idx = id;
-            self.animator.play(Animations.hero_animations[self.last_idx], true);
+            self.animator.play(self.animations[self.last_idx], true);
         }
     }
 };

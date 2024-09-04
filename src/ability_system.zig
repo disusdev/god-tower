@@ -2,6 +2,7 @@ const std = @import("std");
 const rl = @import("rl.zig");
 const Physics = @import("physics.zig");
 const ComponentSystem = @import("component_system.zig");
+const Ease = @import("ease_functions.zig");
 
 
 // @todo controller where you can chouse between brain or hid
@@ -123,6 +124,8 @@ pub const Stats = struct {
         //       white flash for renderer
         self.hp -= @intCast(dmg);
         if (self.hp <= 0) {
+            // play die animation
+            
             self.owner.set_enable(false);
         }
         return dmg;
@@ -175,7 +178,10 @@ pub const AttackAbility = struct {
     front: bool = true,
     play: bool = false,
 
-    pub fn CheckCollisionLineCircle(start: rl.Vector2, end: rl.Vector2, center: rl.Vector2, radius: f32) bool {
+    pub fn CheckCollisionLineCircle(start: rl.Vector2,
+                                    end: rl.Vector2,
+                                    center: rl.Vector2,
+                                    radius: f32) bool {
         const startToEnd = rl.Vector2Subtract(end, start);
         const startToCenter = rl.Vector2Subtract(center, start);
     
@@ -194,7 +200,9 @@ pub const AttackAbility = struct {
     
     pub fn step(self: *AttackAbility, dt: f32) void {
         self.attack_progress = @min(1, self.attack_progress + dt * self.attack_speed);
-        self.angle = rl.Lerp(self.attack_dst_angle, self.attack_src_angle, self.attack_progress);
+        const prog = Ease.out_back(self.attack_progress);
+        
+        self.angle = rl.Lerp(self.attack_dst_angle, self.attack_src_angle, prog);
         const attack_radians = std.math.degreesToRadians(self.angle);
         self.attack_line[0] = self.owner.get_pos();
         self.attack_line[1] = .{ .x = @cos(attack_radians), .y = @sin(attack_radians) };
@@ -205,7 +213,7 @@ pub const AttackAbility = struct {
         self.weapon_slot.set_rot(self.angle + 90);
         
         const mul: f32 = if (self.front) 1 else -1;
-        const child_rot = rl.Lerp(-90 * mul, 90 * mul, self.attack_progress);
+        const child_rot = rl.Lerp(-90 * mul, 90 * mul, prog);
         if (self.weapon) |weapon| {
             weapon.set_rot(child_rot);
         }
@@ -316,7 +324,8 @@ pub const MoveAbilityHandle = struct {
 pub const AttackAbilityHandle = struct {
     id: u64,
     
-    pub fn set_weapon(self: AttackAbilityHandle, entity: ?ComponentSystem.EntityHandle) void {
+    pub fn set_weapon(self: AttackAbilityHandle,
+                      entity: ?ComponentSystem.EntityHandle) void {
         if (attack_abilities.items[self.id].weapon) |e| {
             e.set_parent(null);
         }

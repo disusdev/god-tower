@@ -21,7 +21,95 @@ var map: Map = undefined;
 const SCREEN_WIDTH = 1280;
 const SCREEN_HEIGHT = 800;
 
+const PathNode = struct {
+    pos: rl.Vector2,
+    links: std.ArrayList(PathHandle),
+};
+
+var nodes: std.ArrayList(PathNode) = undefined;
+var main_pos: rl.Vector2 = rl.Vector2Zero();
+
+const PathHandle = struct {
+    id: u64,
+    
+    pub fn get_pos(self: PathHandle) rl.Vector2 {
+        return nodes.items[self.id].pos;
+    }
+    
+    pub fn get_links(self: PathHandle) []PathHandle {
+        return nodes.items[self.id].links.items;
+    }
+};
+
+fn lessThanPrior(context: void, a: PathPrior, b: PathPrior) std.math.Order {
+    _ = context;
+    return std.math.order(a.cost, b.cost);
+}
+
+const PathPrior = struct {
+    node: PathHandle,
+    cost: f32 = 0,
+};
+
+fn calc_heuristic(start: rl.Vector2, end: rl.Vector2) f32 {
+    return @abs(start.x - end.x) + 
+           @abs(start.y - end.y);
+}
+
+fn a_star(start: PathHandle, end: PathHandle) !std.ArrayList(PathHandle) {
+    var nodes_queue = std.PriorityQueue(PathPrior, void, lessThanPrior).init(allocator, {});
+    defer nodes_queue.deinit();
+    try nodes_queue.add(.{ .node = start });
+    
+    var came_from = std.AutoHashMap(PathHandle, ?PathHandle).init(allocator);
+    defer came_from.deinit();
+    try came_from.put(start, null);
+    
+    var curr: PathHandle = undefined;
+    
+    while(nodes_queue.count() != 0) {
+        curr = nodes_queue.remove().node;
+        
+        if (curr.id == end.id) {
+            break;
+        }
+        
+        for (curr.get_links()) |adjecent| {
+            try nodes_queue.add(.{ .node = adjecent, .cost = calc_heuristic(adjecent.get_pos(), end.get_pos()) });
+            try came_from.put(adjecent, curr);
+        }
+    }
+    
+    var path = std.ArrayList(PathHandle).init(allocator);
+    var iterator = came_from.iterator();
+    while (iterator.next()) |node| {
+        try path.append(node.key_ptr.*);
+    }
+    
+    return path;
+}
+
 pub fn main() !void {
+    nodes = std.ArrayList(PathNode).init(allocator);
+    try nodes.append(PathNode{.pos=.{.x=6, .y=2}, .links = std.ArrayList(PathHandle).init(allocator) });
+    try nodes.append(PathNode{.pos=.{.x=1, .y=3}, .links = std.ArrayList(PathHandle).init(allocator) });
+    try nodes.append(PathNode{.pos=.{.x=5, .y=7}, .links = std.ArrayList(PathHandle).init(allocator) });
+    try nodes.append(PathNode{.pos=.{.x=0, .y=8}, .links = std.ArrayList(PathHandle).init(allocator) });
+    
+    try nodes.items[0].links.append(.{.id = 1});
+    try nodes.items[0].links.append(.{.id = 2});
+    try nodes.items[1].links.append(.{.id = 0});
+    try nodes.items[1].links.append(.{.id = 3});
+    try nodes.items[2].links.append(.{.id = 0});
+    try nodes.items[3].links.append(.{.id = 1});
+    
+    const path = try a_star(.{.id = 0}, .{.id = 2});
+    defer path.deinit();
+    
+    // for (path.items, 0..) |node, i| {
+    //     print("{d}: {any}\n", .{ i, node });
+    // }
+
     tracy.setThreadName("Main");
     defer tracy.message("Graceful main thread exit");
 
@@ -48,9 +136,17 @@ pub fn main() !void {
         .zoom = 2.0
     };
 
-    _ = try Entities.enemy(3 * 16 + 10, 10 * 16 + 8);
     _ = try Entities.enemy(4 * 16 + 10 - 4, 11 * 16 + 8 - 4);
-    _ = try Entities.enemy(2 * 16 + 10 + 4, 11 * 16 + 8 - 4);
+    _ = try Entities.slime(0, 3 * 16 + 10, 10 * 16 + 8);
+    _ = try Entities.slime(1, 2 * 16 + 10 + 4, 11 * 16 + 8 - 4);
+    _ = try Entities.slime(2, 2 * 16 + 10 + 4, 10 * 16 + 8 - 4);
+    _ = try Entities.slime(3, 2 * 16 + 10 + 4, 9 * 16 + 8 - 4);
+    _ = try Entities.slime(4, 2 * 16 + 10 + 4, 12 * 16 + 8 - 4);
+    _ = try Entities.slime(5, 2 * 16 + 10 + 4, 13 * 16 + 8 - 4);
+    _ = try Entities.slime(6, 2 * 16 + 10 + 4, 14 * 16 + 8 - 4);
+    _ = try Entities.slime(7, 2 * 16 + 10 + 4, 8 * 16 + 8 - 4);
+    _ = try Entities.slime(8, 2 * 16 + 10 + 4, 7 * 16 + 8 - 4);
+    _ = try Entities.slime(9, 2 * 16 + 10 + 4, 6 * 16 + 8 - 4);
 
     map = Map.room_1();
     const coll_rects = try Map.get_collision_rects(allocator);

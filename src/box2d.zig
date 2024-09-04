@@ -55,6 +55,11 @@ pub const World = struct {
         return handle;
     }
     
+    pub fn removeBody(self: *@This(), handle: BodyHandle) void {
+        self.bodies.swapRemove(handle); // orderedRemove
+        
+    }
+    
     // pub fn deleteBody(self: *@This(), handle: BodyHandle) void { }
 
     pub fn clear(self: *@This()) void {
